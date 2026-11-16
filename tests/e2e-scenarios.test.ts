@@ -149,6 +149,15 @@ describe('end to end: service business', () => {
   })
 })
 
+describe('end to end: messy customer input', () => {
+  it('still finds the website documents and product for abbreviated, typo-ridden questions', async () => {
+    const t = await setup('produk', [out({ intent: 'tanya_harga', reply_parts: ['Paket Website UMKM Rp1,5 juta per tahun ya Kak'] })])
+    await t.pipeline.handle(t.msg('brp biaya bkin web utk usaha kopi?'))
+    expect(t.prompts[0].user).toContain('Paket Website UMKM')
+    expect(t.gateway.toCustomers().join(' ')).toContain('Rp1,5 juta')
+  })
+})
+
 describe('end to end: the bot never sends the customer to its own number', () => {
   const adversarial = [
     out({ intent: 'tanya_harga', reply_parts: [

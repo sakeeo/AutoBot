@@ -154,7 +154,9 @@ export class HandoffService extends EventEmitter {
     for (const a of recipients) {
       if (self && normalizeNumber(a.number) === normalizeNumber(self)) continue
       try {
-        await gateway.sendText(gateway.jidFor(normalizeNumber(a.number)), summary)
+        const sentId = await gateway.sendText(gateway.jidFor(normalizeNumber(a.number)), summary)
+        // Remember it: the echo of this message must not look like a human typing from the phone.
+        if (sentId) conv.rememberSentId(sentId)
         notified.push(a.id)
       } catch {
         /* an unreachable admin must never break the customer's conversation */

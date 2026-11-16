@@ -50,6 +50,13 @@ describe('BrandPage: identity and presets', () => {
     fireEvent.change(await screen.findByLabelText('Nama bisnis'), { target: { value: 'Kopi Sudut' } })
     await waitFor(() => expect(lastSaved(api).identity.businessName).toBe('Kopi Sudut'))
   })
+  it('does not lose an edit when the user leaves the page before the debounce fires', async () => {
+    const api = setApi(profile())
+    const { unmount } = render(<BrandPage />)
+    fireEvent.change(await screen.findByLabelText('Nama bisnis'), { target: { value: 'Cepat Pindah' } })
+    unmount()
+    await waitFor(() => expect(lastSaved(api).identity.businessName).toBe('Cepat Pindah'))
+  })
   it('counts the characters of the about text against the 500 limit', async () => {
     setApi(profile())
     render(<BrandPage />)

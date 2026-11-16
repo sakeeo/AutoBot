@@ -158,6 +158,9 @@ export function validateProfile(p: BrandProfile, ctx: ValidateCtx): Issue[] {
 
   if (!p.identity.businessName.trim()) warn('identity.businessName', 'Nama bisnis belum diisi.')
 
+  if (p.admins.length === 0)
+    warn('admins', 'Belum ada admin: saat percakapan diserahkan, tidak ada manusia yang dikabari lewat WhatsApp (hanya notifikasi di komputer ini).')
+
   p.admins.forEach((a, i) => {
     const n = normalizeNumber(a.number)
     if (n.length < 8) err(`admins[${i}].number`, 'Nomor admin tidak valid.')

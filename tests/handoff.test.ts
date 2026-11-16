@@ -140,6 +140,11 @@ describe('HandoffService.trigger', () => {
     expect(closed.farewell).toMatch(/di luar jam kerja/i)
     expect(closed.farewell).not.toMatch(/\{[a-z_]+\}/)
   })
+  it('remembers the ids of the summaries it sends so their echoes are never mistaken for a human', async () => {
+    const { conv, svc } = setup()
+    await svc.trigger({ profile: profile(), chatId: C, reason: 'komplain', productName: null })
+    expect(conv.isSentId('m1')).toBe(true)
+  })
   it('pauses for the configured number of hours', async () => {
     const { clock, conv, svc } = setup()
     const p = profile()

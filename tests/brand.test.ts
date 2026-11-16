@@ -85,6 +85,15 @@ describe('validateProfile', () => {
     p.rules = [{ id: 'r', enabled: true, when: {}, then: { action: 'handoff', adminId: 'ghost' } }]
     expect(errors(p).some((i) => i.field === 'rules[0].then.adminId')).toBe(true)
   })
+  it('warns (does not block) when no admin is configured, because a handoff would reach nobody', () => {
+    const p = jasa()
+    p.admins = []
+    const issues = validateProfile(p, ctx)
+    expect(issues.some((i) => i.level === 'warn' && i.field === 'admins')).toBe(true)
+    expect(issues.some((i) => i.level === 'error')).toBe(false)
+    p.admins = [admin()]
+    expect(validateProfile(p, ctx).some((i) => i.field === 'admins')).toBe(false)
+  })
   it('warns when a rule uses working hours but every day is closed', () => {
     const p = jasa()
     p.admins = [admin()]

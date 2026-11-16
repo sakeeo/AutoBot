@@ -25,7 +25,14 @@ export function useBrand() {
 
   useEffect(() => {
     load()
-    return () => { if (timer.current) clearTimeout(timer.current) }
+    return () => {
+      // Leaving the page must not drop an edit that is still waiting for the debounce.
+      if (timer.current) {
+        clearTimeout(timer.current)
+        timer.current = null
+        if (latest.current) void window.api.saveBrandDraft(latest.current)
+      }
+    }
   }, [load])
 
   const flush = useCallback(async () => {
