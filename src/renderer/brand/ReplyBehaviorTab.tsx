@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useSettings } from '../useSettings'
 
-export function RulesPage() {
+export function ReplyBehaviorTab() {
   const [settings, patch] = useSettings()
   const [reply, setReply] = useState<string | null>(null)
   if (!settings) return null
@@ -9,7 +9,7 @@ export function RulesPage() {
 
   return (
     <div style={{ maxWidth: 640 }}>
-      <h2 className="h4 mb-3"><i className="bi bi-sliders me-2" />Aturan Jawaban</h2>
+      <p className="text-body-secondary">Perilaku dasar balasan. Perubahan di tab ini langsung berlaku, tanpa menekan Terapkan.</p>
 
       <div className="mb-4">
         <label htmlFor="threshold" className="form-label">
@@ -45,12 +45,6 @@ export function RulesPage() {
         <input id="groups" type="checkbox" role="switch" className="form-check-input"
           checked={settings.allowGroups} onChange={(e) => patch({ allowGroups: e.target.checked })} />
         <label htmlFor="groups" className="form-check-label">Izinkan menjawab di grup</label>
-      </div>
-
-      <div className="form-check form-switch mb-3">
-        <input id="autostart" type="checkbox" role="switch" className="form-check-input"
-          checked={settings.autoStart} onChange={(e) => patch({ autoStart: e.target.checked })} />
-        <label htmlFor="autostart" className="form-check-label">Jalankan saat login</label>
       </div>
 
       <div className="mb-3" style={{ maxWidth: 240 }}>

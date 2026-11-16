@@ -8,13 +8,15 @@ import { LeadTab } from '../brand/LeadTab'
 import { HoursTab } from '../brand/HoursTab'
 import { PreviewPanel } from '../brand/PreviewPanel'
 import { ApplyBar } from '../brand/ApplyBar'
+import { ReplyBehaviorTab } from '../brand/ReplyBehaviorTab'
 
 const TABS = [
   { id: 'identity', label: 'Identitas & Gaya' },
   { id: 'rules', label: 'Arah Konversi' },
   { id: 'links', label: 'Tautan & Admin' },
   { id: 'lead', label: 'Lead & Pesan' },
-  { id: 'hours', label: 'Jam & Batas' }
+  { id: 'hours', label: 'Jam & Batas' },
+  { id: 'behavior', label: 'Perilaku balasan' }
 ] as const
 
 export function BrandPage() {
@@ -47,6 +49,7 @@ export function BrandPage() {
           {tab === 'links' && <LinksAdminsTab draft={draft} update={update} botNumber={botNumber} />}
           {tab === 'lead' && <LeadTab draft={draft} update={update} />}
           {tab === 'hours' && <HoursTab draft={draft} update={update} />}
+          {tab === 'behavior' && <ReplyBehaviorTab />}
         </div>
         <div className="col-xl-5">
           <PreviewPanel beforeSend={flush} />

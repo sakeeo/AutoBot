@@ -5,7 +5,7 @@ import { ConnectionPage } from '../../src/renderer/pages/ConnectionPage'
 import { KnowledgePage } from '../../src/renderer/pages/KnowledgePage'
 import { TestPanel } from '../../src/renderer/pages/TestPanel'
 import { AiSettings } from '../../src/renderer/pages/AiSettings'
-import { RulesPage } from '../../src/renderer/pages/RulesPage'
+import { ReplyBehaviorTab as RulesPage } from '../../src/renderer/brand/ReplyBehaviorTab'
 import { LogPage } from '../../src/renderer/pages/LogPage'
 import { applyTheme } from '../../src/renderer/theme'
 import type { Settings } from '../../src/shared/types'
@@ -193,18 +193,12 @@ describe('AiSettings', () => {
   })
 })
 
-describe('RulesPage', () => {
+describe('ReplyBehaviorTab', () => {
   it('saves a changed threshold', async () => {
     const api = setApi()
     render(<RulesPage />)
     fireEvent.change(await screen.findByLabelText(/ambang/i), { target: { value: '0.8' } })
     await waitFor(() => expect(api.updateSettings).toHaveBeenCalledWith({ threshold: 0.8 }))
-  })
-  it('saves the auto-start toggle', async () => {
-    const api = setApi()
-    render(<RulesPage />)
-    fireEvent.click(await screen.findByLabelText(/jalankan saat login/i))
-    await waitFor(() => expect(api.updateSettings).toHaveBeenCalledWith({ autoStart: true }))
   })
   it('saves the out-of-context action', async () => {
     const api = setApi()

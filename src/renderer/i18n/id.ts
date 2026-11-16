@@ -1,13 +1,14 @@
 export const id = {
   appName: 'WA Otomation',
   nav: {
-    connection: 'Koneksi',
+    dashboard: 'Dashboard',
+    test: 'Uji Jawaban',
+    log: 'Log',
+    settings: 'Pengaturan',
+    connector: 'Connector',
     knowledge: 'Pengetahuan',
     brand: 'Brand & Konversi',
-    test: 'Uji Jawaban',
-    rules: 'Aturan',
-    ai: 'AI',
-    log: 'Log'
+    security: 'Keamanan & Umum'
   },
   state: {
     disconnected: 'Terputus',
