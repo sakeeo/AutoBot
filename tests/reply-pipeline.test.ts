@@ -17,9 +17,12 @@ class FakeGateway implements WaGateway {
   onStatus(_cb: (s: ConnStatus) => void): void {}
   async connect(): Promise<void> {}
   async logout(): Promise<void> {}
-  async sendText(chatId: string, text: string, opts?: { typingMs?: number }): Promise<void> {
+  selfNumber(): string | null { return '6285119308345' }
+  jidFor(number: string): string { return `${number.replace(/\D/g, '')}@s.whatsapp.net` }
+  async sendText(chatId: string, text: string, opts?: { typingMs?: number }): Promise<string | null> {
     if (this.fail) throw new Error('send failed')
     this.sent.push({ chatId, text, typingMs: opts?.typingMs })
+    return `m-${this.sent.length}`
   }
 }
 

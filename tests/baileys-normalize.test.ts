@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { normalizeMessage, nextReconnect, shouldHandleUpsert } from '../src/main/wa/baileys-gateway'
+import {
+  normalizeMessage, nextReconnect, shouldHandleUpsert, selfNumberFromJid, jidForNumber
+} from '../src/main/wa/baileys-gateway'
 
 const base = (message: any, key: any = {}) => ({
   key: { id: 'ABC', remoteJid: '6281@s.whatsapp.net', fromMe: false, ...key },
@@ -59,9 +61,34 @@ describe('nextReconnect', () => {
 })
 
 describe('shouldHandleUpsert', () => {
-  it('only handles live notifications, not history sync or appended messages', () => {
+  it('handles live notifications, not history sync or appended customer messages', () => {
     expect(shouldHandleUpsert('notify')).toBe(true)
     expect(shouldHandleUpsert('append')).toBe(false)
     expect(shouldHandleUpsert('history')).toBe(false)
+  })
+  it('also forwards appended messages that we sent (a human typing from the phone)', () => {
+    expect(shouldHandleUpsert('append', true)).toBe(true)
+    expect(shouldHandleUpsert('append', false)).toBe(false)
+    expect(shouldHandleUpsert('history', true)).toBe(false)
+  })
+})
+
+describe('own messages', () => {
+  it('still normalises messages sent by us', () => {
+    const m = normalizeMessage(base({ conversation: 'dari HP admin' }, { fromMe: true }))!
+    expect(m.fromMe).toBe(true)
+    expect(m.text).toBe('dari HP admin')
+  })
+})
+
+describe('account helpers', () => {
+  it('extracts the digits of the linked number from a device jid', () => {
+    expect(selfNumberFromJid('6285119308345:12@s.whatsapp.net')).toBe('6285119308345')
+    expect(selfNumberFromJid('6285119308345@s.whatsapp.net')).toBe('6285119308345')
+    expect(selfNumberFromJid(undefined)).toBeNull()
+  })
+  it('builds a user jid from any phone number format', () => {
+    expect(jidForNumber('0812-3456-7890')).toBe('6281234567890@s.whatsapp.net')
+    expect(jidForNumber('+62 812 3456 7890')).toBe('6281234567890@s.whatsapp.net')
   })
 })

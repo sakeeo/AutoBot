@@ -1,6 +1,7 @@
 import { mkdirSync, rmSync } from 'node:fs'
 import pino from 'pino'
 import type { ConnStatus, IncomingMessage } from '../../shared/types'
+import { normalizeNumber } from '../../shared/brand'
 import type { WaGateway } from './gateway'
 
 // Baileys is ESM-only; it is loaded with dynamic import() so the CJS main bundle can use it.
@@ -63,9 +64,23 @@ export function nextReconnect(
   return { reconnect: true, delayMs: Math.min(1000 * 2 ** attempt, 60_000), clearSession: false }
 }
 
-/** Only live notifications are answered; history sync and appended (offline) messages are not. */
-export function shouldHandleUpsert(type: string): boolean {
-  return type === 'notify'
+/**
+ * Live notifications are forwarded. Appended messages are forwarded only when we sent them
+ * (a human typing from the phone), so the bot can notice a takeover; history sync never is.
+ */
+export function shouldHandleUpsert(type: string, fromMe = false): boolean {
+  return type === 'notify' || (type === 'append' && fromMe)
+}
+
+/** "6285119308345:12@s.whatsapp.net" -> "6285119308345". */
+export function selfNumberFromJid(jid: string | null | undefined): string | null {
+  if (!jid) return null
+  const digits = jid.split('@')[0].split(':')[0].replace(/\D/g, '')
+  return digits || null
+}
+
+export function jidForNumber(number: string): string {
+  return `${normalizeNumber(number)}@s.whatsapp.net`
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
@@ -130,20 +145,29 @@ export class BaileysGateway implements WaGateway {
       }
     })
     sock.ev.on('messages.upsert', ({ messages, type }: { messages: RawWaMessage[]; type: string }) => {
-      if (!shouldHandleUpsert(type)) return
       for (const raw of messages) {
+        if (!shouldHandleUpsert(type, !!raw.key?.fromMe)) continue
         const m = normalizeMessage(raw)
         if (m) for (const cb of this.msgCbs) cb(m)
       }
     })
   }
 
-  async sendText(chatId: string, text: string, opts: { typingMs?: number } = {}): Promise<void> {
+  selfNumber(): string | null {
+    return selfNumberFromJid(this.sock?.user?.id)
+  }
+
+  jidFor(number: string): string {
+    return jidForNumber(number)
+  }
+
+  async sendText(chatId: string, text: string, opts: { typingMs?: number } = {}): Promise<string | null> {
     if (!this.sock) throw new Error('WhatsApp not connected')
     try {
       await this.sock.sendPresenceUpdate('composing', chatId)
       if (opts.typingMs) await sleep(opts.typingMs)
-      await this.sock.sendMessage(chatId, { text })
+      const sent = await this.sock.sendMessage(chatId, { text })
+      return sent?.key?.id ?? null
     } finally {
       await this.sock.sendPresenceUpdate('paused', chatId).catch(() => undefined)
     }
