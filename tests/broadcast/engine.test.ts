@@ -50,11 +50,18 @@ function setup(over: { age?: number; start?: number; db?: Db } = {}) {
   const campaign = (o: { kind?: 'broadcast' | 'konfirmasi'; audience?: 'chat' | 'impor' | 'semua'; template?: string } = {}) =>
     store.createCampaign({ name: 'Uji', kind: o.kind ?? 'broadcast', template: o.template ?? 'Halo {nama}, ini {bisnis}: ada menu baru.', audience: o.audience ?? 'semua' })
   /** Tick once a second until `ms` of fake time has passed (or nothing more can happen). */
-  const run = async (ms: number) => {
+  const run = async (ms: number, step = 2000, e: BroadcastEngine = engine) => {
     const end = clock.t + ms
-    while (clock.t < end) { await engine.tick(); clock.t += 1000 }
+    while (clock.t < end) { await e.tick(); clock.t += step }
   }
-  return { db, clock, store, gateway, feed, conv, flags, settings, engine, people, campaign, run }
+  /** Pretend the number was already used for `days` earlier days, so the warm-up cap has grown. */
+  const warmedUp = (days: number) => {
+    const other = store.upsertContact({ number: '628999999999', jid: '628999999999@s.whatsapp.net', source: 'chat', status: 'aktif' })
+    for (let d = 1; d <= days; d++)
+      db.prepare("INSERT INTO broadcast_sends(campaign_id, contact_id, status, sent_at, created_at) VALUES (999, ?, 'terkirim', ?, ?)")
+        .run(other.id, at(12, 0, 16 - d), at(12, 0, 16 - d))
+  }
+  return { db, clock, store, gateway, feed, conv, flags, settings, engine, people, campaign, run, warmedUp }
 }
 
 describe('BroadcastEngine pacing and content', () => {
@@ -94,11 +101,12 @@ describe('BroadcastEngine pacing and content', () => {
   })
   it('pauses for 3–8 minutes after every 10 messages', async () => {
     const t = setup()
-    t.people(12)
+    t.warmedUp(4) // day 5: the warm-up cap is no longer the limit
+    t.people(14)
     t.engine.start(t.campaign().id)
-    await t.run(10 * 21_000)
+    await t.run(260_000)
     expect(t.gateway.sent).toHaveLength(10)
-    await t.run(100_000) // still inside the 3-minute batch pause
+    await t.run(60_000) // still inside the 3-minute batch pause
     expect(t.gateway.sent).toHaveLength(10)
     await t.run(100_000)
     expect(t.gateway.sent.length).toBeGreaterThan(10)
@@ -155,7 +163,7 @@ describe('BroadcastEngine: daily limits and the send window', () => {
     t.people(30)
     const c = t.campaign()
     t.engine.start(c.id)
-    await t.run(60 * 60_000)
+    await t.run(60 * 60_000, 5000)
     expect(t.gateway.sent).toHaveLength(10)
 
     // Restart: fresh engine on the same database. The campaign must come back paused, and the cap must still hold.
@@ -168,11 +176,11 @@ describe('BroadcastEngine: daily limits and the send window', () => {
     await engine2.tick()
     expect(t.gateway.sent).toHaveLength(10)
     engine2.start(c.id)
-    for (let i = 0; i < 600; i++) { await engine2.tick(); t.clock.t += 1000 }
+    await t.run(10 * 60_000, 5000, engine2)
     expect(t.gateway.sent).toHaveLength(10)
 
     t.clock.t = at(9, 0, 17)
-    for (let i = 0; i < 1800; i++) { await engine2.tick(); t.clock.t += 1000 }
+    await t.run(30 * 60_000, 5000, engine2)
     expect(t.gateway.sent).toHaveLength(22) // day 2 warm-up cap is 12
   })
   it('does not send outside the send window, and starts when it opens', async () => {
