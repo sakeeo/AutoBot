@@ -11,10 +11,20 @@ import { BaileysGateway } from './wa/baileys-gateway'
 import { ClaudeProvider, type AiProvider } from './answer/ai-answerer'
 import { API_KEY_SECRET } from './ai-key'
 import { registerIpc } from './ipc'
+import { createTray } from './tray'
 import { CHANNELS as C } from '../shared/channels'
 import type { ConnStatus } from '../shared/types'
 
 let win: BrowserWindow | null = null
+let quitting = false
+let trayActive = false
+
+function showWindow(): void {
+  if (!win || win.isDestroyed()) win = createWindow()
+  if (win.isMinimized()) win.restore()
+  win.show()
+  win.focus()
+}
 
 function createWindow(): BrowserWindow {
   const w = new BrowserWindow({
@@ -33,6 +43,13 @@ function createWindow(): BrowserWindow {
   w.webContents.on('will-navigate', (e) => e.preventDefault())
   if (process.env['ELECTRON_RENDERER_URL']) w.loadURL(process.env['ELECTRON_RENDERER_URL'])
   else w.loadFile(join(__dirname, '../renderer/index.html'))
+  // With a tray, closing the window keeps the bot running in the background.
+  w.on('close', (e) => {
+    if (!quitting && trayActive) {
+      e.preventDefault()
+      w.hide()
+    }
+  })
   w.on('closed', () => { win = null })
   return w
 }
@@ -68,7 +85,19 @@ function boot(): void {
   const send = (channel: string, payload: unknown): void => {
     if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
   }
-  gateway.onStatus((s) => { status = s; send(C.evtStatus, s) })
+  const tray = createTray({ iconPath: join(__dirname, '../../resources/tray.png'), showWindow })
+  trayActive = tray !== null
+  const STATUS_LABEL: Record<ConnStatus['state'], string> = {
+    disconnected: 'Terputus',
+    connecting: 'Menghubungkan…',
+    waiting_qr: 'Menunggu scan QR',
+    connected: 'Terhubung'
+  }
+  gateway.onStatus((s) => {
+    status = s
+    send(C.evtStatus, s)
+    tray?.refresh(STATUS_LABEL[s.state])
+  })
   indexer.on('status', (e) => send(C.evtIndexStatus, e))
   pipeline.on('escalate', (m: { chatId: string; text: string | null }) => {
     send(C.evtEscalate, { chatId: m.chatId, text: m.text })
@@ -89,8 +118,10 @@ function boot(): void {
     onSettingsChanged: (prev, next) => {
       const key = (x: typeof prev): string => JSON.stringify([x.knowledgeFolders, x.excludePatterns])
       if (key(prev) !== key(next)) restartIndexer()
+      if (prev.autoStart !== next.autoStart) app.setLoginItemSettings({ openAtLogin: next.autoStart })
     }
   })
+  app.setLoginItemSettings({ openAtLogin: settings.get().autoStart })
 
   // Resume the previous WhatsApp session automatically.
   if (existsSync(join(sessionDir, 'creds.json'))) gateway.connect().catch((e) => logger.error(e))
@@ -100,12 +131,13 @@ const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
   app.quit()
 } else {
-  app.on('second-instance', () => {
-    if (win) { if (win.isMinimized()) win.restore(); win.focus() }
-  })
+  app.on('second-instance', () => showWindow())
+  app.on('before-quit', () => { quitting = true })
   app.whenReady().then(() => {
     boot()
     win = createWindow()
   })
-  app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
+  app.on('window-all-closed', () => {
+    if (!trayActive && process.platform !== 'darwin') app.quit()
+  })
 }

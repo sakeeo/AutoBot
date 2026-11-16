@@ -190,6 +190,12 @@ describe('RulesPage', () => {
     fireEvent.change(await screen.findByLabelText(/ambang/i), { target: { value: '0.8' } })
     await waitFor(() => expect(api.updateSettings).toHaveBeenCalledWith({ threshold: 0.8 }))
   })
+  it('saves the auto-start toggle', async () => {
+    const api = setApi()
+    render(<RulesPage />)
+    fireEvent.click(await screen.findByLabelText(/jalankan saat login/i))
+    await waitFor(() => expect(api.updateSettings).toHaveBeenCalledWith({ autoStart: true }))
+  })
   it('saves the out-of-context action', async () => {
     const api = setApi()
     render(<RulesPage />)

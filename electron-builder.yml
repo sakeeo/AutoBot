@@ -1,0 +1,24 @@
+appId: id.kerabatkoding.wa-otomation
+productName: WA Otomation
+directories:
+  output: dist
+  buildResources: build
+files:
+  - out/**
+  - resources/**
+  - package.json
+asarUnpack:
+  - '**/*.node'
+npmRebuild: true
+win:
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Utility
+  maintainer: Kerabat Koding <dev@example.com>

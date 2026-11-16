@@ -47,6 +47,12 @@ export function RulesPage() {
         <label htmlFor="groups" className="form-check-label">Izinkan menjawab di grup</label>
       </div>
 
+      <div className="form-check form-switch mb-3">
+        <input id="autostart" type="checkbox" role="switch" className="form-check-input"
+          checked={settings.autoStart} onChange={(e) => patch({ autoStart: e.target.checked })} />
+        <label htmlFor="autostart" className="form-check-label">Jalankan saat login</label>
+      </div>
+
       <div className="mb-3" style={{ maxWidth: 240 }}>
         <label htmlFor="cooldown" className="form-label">Cooldown per kontak (detik)</label>
         <input id="cooldown" type="number" className="form-control" min={0} max={3600}
