@@ -42,3 +42,15 @@ describe('CHANNELS', () => {
       expect(CHANNELS).toHaveProperty(c)
   })
 })
+
+describe('SettingsPatchSchema ai provider', () => {
+  const ai = (o: object) => ({ ai: { model: 'm', maxTokens: 100, ...o } })
+  it('accepts known providers and rejects unknown ones', () => {
+    expect(SettingsPatchSchema.safeParse(ai({ provider: 'deepseek' })).success).toBe(true)
+    expect(SettingsPatchSchema.safeParse(ai({ provider: 'nope' })).success).toBe(false)
+  })
+  it('only accepts http(s) base URLs', () => {
+    expect(SettingsPatchSchema.safeParse(ai({ provider: 'custom', baseUrl: 'http://localhost:11434/v1' })).success).toBe(true)
+    expect(SettingsPatchSchema.safeParse(ai({ provider: 'custom', baseUrl: 'file:///etc/passwd' })).success).toBe(false)
+  })
+})

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { PROVIDER_IDS } from './providers'
 import type { Answer, ConnStatus, Decision, Settings } from './types'
 
 export { CHANNELS } from './channels'
@@ -16,9 +17,15 @@ export const SettingsPatchSchema = z
     cooldownSec: z.number().int().min(0).max(3600),
     ai: z
       .object({
-        provider: z.literal('claude'),
-        model: z.string().min(1).max(100),
-        maxTokens: z.number().int().min(16).max(4096)
+        provider: z.enum(PROVIDER_IDS),
+        // Empty is allowed so the user can pick "custom" before typing a model; save-time checks enforce it.
+        model: z.string().max(100),
+        maxTokens: z.number().int().min(16).max(4096),
+        baseUrl: z
+          .string()
+          .max(300)
+          .refine((u) => u === '' || /^https?:\/\/[^\s/]+/i.test(u), 'URL harus diawali http:// atau https://')
+          .optional()
       })
       .strict(),
     autoStart: z.boolean(),

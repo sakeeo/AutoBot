@@ -1,3 +1,5 @@
+import type { ProviderId } from './providers'
+
 export interface Settings {
   knowledgeFolders: string[]
   excludePatterns: string[]
@@ -6,7 +8,7 @@ export interface Settings {
   threshold: number
   allowGroups: boolean
   cooldownSec: number
-  ai: { provider: 'claude'; model: string; maxTokens: number }
+  ai: { provider: ProviderId; model: string; maxTokens: number; baseUrl?: string }
   autoStart: boolean
   theme: 'light' | 'dark' | 'auto'
 }

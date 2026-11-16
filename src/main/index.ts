@@ -8,8 +8,9 @@ import { IndexStore } from './knowledge/index-store'
 import { Indexer } from './knowledge/indexer'
 import { ReplyPipeline } from './pipeline/reply-pipeline'
 import { BaileysGateway } from './wa/baileys-gateway'
-import { ClaudeProvider, type AiProvider } from './answer/ai-answerer'
-import { API_KEY_SECRET } from './ai-key'
+import type { AiProvider } from './answer/ai-answerer'
+import { makeProvider } from './answer/make-provider'
+import { secretNameFor } from '../shared/providers'
 import { registerIpc } from './ipc'
 import { createTray } from './tray'
 import { CHANNELS as C } from '../shared/channels'
@@ -65,12 +66,13 @@ function boot(): void {
   const sessionDir = join(data, 'sessions', 'default')
   const gateway = new BaileysGateway({ sessionDir, logger: logger.child({ mod: 'baileys' }, { level: 'warn' }) })
 
-  let providerCache: { key: string; provider: AiProvider } | null = null
-  const makeProvider = (key: string): AiProvider => new ClaudeProvider(key)
+  let providerCache: { id: string; provider: AiProvider } | null = null
   const currentProvider = (): AiProvider | null => {
-    const key = secrets.get(API_KEY_SECRET)
+    const ai = settings.get().ai
+    const key = secrets.get(secretNameFor(ai.provider))
     if (!key) return null
-    if (providerCache?.key !== key) providerCache = { key, provider: makeProvider(key) }
+    const id = JSON.stringify([ai.provider, ai.baseUrl ?? '', key])
+    if (providerCache?.id !== id) providerCache = { id, provider: makeProvider(ai, key) }
     return providerCache.provider
   }
 

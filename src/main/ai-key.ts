@@ -18,9 +18,15 @@ export async function saveApiKey(
     secrets: SecretStore
     makeProvider: (key: string) => AiProvider
     ai: { model: string; maxTokens: number }
+    /** Secret slot for the selected provider; defaults to the legacy Claude slot. */
+    secretName?: string
+    /** Set when the provider needs extra config (custom endpoint) that is still missing. */
+    configError?: string
   },
   key: string
 ): Promise<{ ok: boolean; error?: string }> {
+  if (deps.configError) return { ok: false, error: deps.configError }
+  if (!deps.ai.model.trim()) return { ok: false, error: 'Isi nama model terlebih dahulu.' }
   const parsed = ApiKeySchema.safeParse(key)
   if (!parsed.success) return { ok: false, error: MESSAGES.INVALID }
   try {
@@ -33,6 +39,6 @@ export async function saveApiKey(
   } catch (e) {
     return { ok: false, error: MESSAGES[toAiError(e).code] }
   }
-  deps.secrets.set(API_KEY_SECRET, parsed.data)
+  deps.secrets.set(deps.secretName ?? API_KEY_SECRET, parsed.data)
   return { ok: true }
 }

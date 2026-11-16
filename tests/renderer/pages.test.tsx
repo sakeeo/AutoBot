@@ -177,6 +177,16 @@ describe('AiSettings', () => {
     fireEvent.click(await screen.findByRole('button', { name: /hubungkan ke claude/i }))
     expect(api.openConsole).toHaveBeenCalled()
   })
+  it('switches provider and applies its default model', async () => {
+    const api = setApi()
+    render(<AiSettings />)
+    fireEvent.change(await screen.findByLabelText(/penyedia ai/i), { target: { value: 'deepseek' } })
+    await waitFor(() =>
+      expect(api.updateSettings).toHaveBeenCalledWith({
+        ai: { provider: 'deepseek', model: 'deepseek-chat', maxTokens: 400, baseUrl: undefined }
+      })
+    )
+  })
   it('discloses that document snippets are sent to the provider', async () => {
     render(<AiSettings />)
     expect(await screen.findByText(/mengirim potongan dokumen/i)).toBeTruthy()

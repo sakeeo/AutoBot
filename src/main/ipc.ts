@@ -9,9 +9,8 @@ import type { WaGateway } from './wa/gateway'
 import type { ConnStatus, Settings } from '../shared/types'
 import { CHANNELS as C } from '../shared/channels'
 import { ApiKeySchema, LimitSchema, QuestionSchema, SettingsPatchSchema, type LogRow } from '../shared/ipc'
-import { API_KEY_SECRET, saveApiKey } from './ai-key'
-
-export const ANTHROPIC_CONSOLE_URL = 'https://console.anthropic.com/settings/keys'
+import { saveApiKey } from './ai-key'
+import { PROVIDERS, resolveBaseUrl, secretNameFor } from '../shared/providers'
 
 export interface IpcDeps {
   gateway: WaGateway
@@ -22,7 +21,7 @@ export interface IpcDeps {
   secrets: SecretStore
   pipeline: ReplyPipeline
   db: Db
-  makeProvider(key: string): AiProvider
+  makeProvider(ai: Settings['ai'], key: string): AiProvider
   getWindow(): BrowserWindow | null
   onSettingsChanged(prev: Settings, next: Settings): void
 }
@@ -35,9 +34,13 @@ export function registerIpc(d: IpcDeps): void {
   ipcMain.handle(C.getSettings, () => d.settings.get())
   ipcMain.handle(C.updateSettings, (_e, raw: unknown) => {
     const patch = SettingsPatchSchema.parse(raw)
-    if (patch.mode === 'ai' && !d.secrets.has(API_KEY_SECRET)) throw new Error('API key belum diatur.')
     const prev = d.settings.get()
-    const next = d.settings.update({ ...patch, ai: patch.ai ? { ...prev.ai, ...patch.ai } : prev.ai })
+    const ai = patch.ai ? { ...prev.ai, ...patch.ai } : prev.ai
+    const hasKey = d.secrets.has(secretNameFor(ai.provider))
+    if (patch.mode === 'ai' && !hasKey) throw new Error('API key belum diatur.')
+    // Switching to a provider that has no key yet must not leave AI mode on with nothing to call.
+    const mode = patch.mode ?? (prev.mode === 'ai' && !hasKey ? 'extractive' : prev.mode)
+    const next = d.settings.update({ ...patch, mode, ai })
     d.onSettingsChanged(prev, next)
     return next
   })
@@ -56,15 +59,29 @@ export function registerIpc(d: IpcDeps): void {
   ipcMain.handle(C.saveApiKey, (_e, key: unknown) => {
     const parsed = ApiKeySchema.safeParse(key)
     if (!parsed.success) return { ok: false, error: 'API key tidak valid.' }
-    return saveApiKey({ secrets: d.secrets, makeProvider: d.makeProvider, ai: d.settings.get().ai }, parsed.data)
+    const ai = d.settings.get().ai
+    return saveApiKey(
+      {
+        secrets: d.secrets,
+        makeProvider: (k) => d.makeProvider(ai, k),
+        ai,
+        secretName: secretNameFor(ai.provider),
+        configError:
+          ai.provider === 'custom' && !resolveBaseUrl('custom', ai.baseUrl) ? 'Isi URL endpoint terlebih dahulu.' : undefined
+      },
+      parsed.data
+    )
   })
-  ipcMain.handle(C.hasApiKey, () => d.secrets.has(API_KEY_SECRET))
+  ipcMain.handle(C.hasApiKey, () => d.secrets.has(secretNameFor(d.settings.get().ai.provider)))
   ipcMain.handle(C.deleteApiKey, () => {
-    d.secrets.delete(API_KEY_SECRET)
+    d.secrets.delete(secretNameFor(d.settings.get().ai.provider))
     const prev = d.settings.get()
     if (prev.mode === 'ai') d.onSettingsChanged(prev, d.settings.update({ mode: 'extractive' }))
   })
-  ipcMain.handle(C.openConsole, () => shell.openExternal(ANTHROPIC_CONSOLE_URL))
+  ipcMain.handle(C.openConsole, () => {
+    const url = PROVIDERS[d.settings.get().ai.provider].consoleUrl
+    return url ? shell.openExternal(url) : undefined
+  })
 
   ipcMain.handle(C.getLog, (_e, limit: unknown): LogRow[] =>
     d.db
