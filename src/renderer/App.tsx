@@ -1,10 +1,45 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useSettings } from './useSettings'
 import { applyTheme } from './theme'
 import { id } from './i18n/id'
 import { SETTINGS_ITEMS, TOP_ITEMS, type NavKey } from './nav'
+import { LockScreen } from './LockScreen'
+import { AuthContext, useAuth } from './auth-context'
+import { useIdleLock } from './useIdleLock'
+import type { AuthState } from '../shared/ipc'
 
+/** Gate: nothing but the lock screen loads while the app is locked. */
 export function App() {
+  const [auth, setAuth] = useState<AuthState | null>(null)
+  const refresh = useCallback(async () => setAuth(await window.api.authState()), [])
+  useEffect(() => { refresh() }, [refresh])
+  useEffect(() => {
+    // The main process refuses data calls with LOCKED when the lock engaged behind the UI's back.
+    const onReject = (e: Event): void => {
+      const reason = (e as PromiseRejectionEvent).reason
+      if (String(reason?.message ?? reason).includes('LOCKED')) {
+        e.preventDefault()
+        refresh()
+      }
+    }
+    window.addEventListener('unhandledrejection', onReject)
+    return () => window.removeEventListener('unhandledrejection', onReject)
+  }, [refresh])
+
+  if (!auth) return null
+  if (auth.enabled && auth.locked) return <LockScreen onUnlocked={refresh} />
+  return (
+    <AuthContext.Provider value={{ state: auth, refresh }}>
+      <Shell />
+    </AuthContext.Provider>
+  )
+}
+
+function Shell() {
+  const { state, refresh } = useAuth()
+  useIdleLock(state.enabled ? state.autoLockMin : 0, () => {
+    window.api.authLock().then(refresh)
+  })
   const [page, setPage] = useState<NavKey>('dashboard')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settings] = useSettings()
