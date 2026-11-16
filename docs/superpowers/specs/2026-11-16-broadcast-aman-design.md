@@ -77,7 +77,6 @@ Kampanye berjalan → `dijeda` (tidak pernah lanjut otomatis; lanjut perlu tinda
 - ≥ 3 pengiriman gagal beruntun atau ≥ 20% gagal dari 20 terakhir;
 - ≥ 3 berhenti berlangganan dalam 30 pengiriman terakhir, atau 1 kata risiko tinggi;
 - ≥ 30 terkirim ke kontak non-chat dengan 0 balasan;
-- jam kirim berakhir bukan jeda melainkan menunggu (bukan pemutus).
 Setelah aplikasi dimulai ulang, kampanye yang berjalan kembali ke `dijeda`. Tombol **Hentikan semua** selalu terlihat saat berjalan; saklar global "Broadcast aktif" mematikan seluruh pengiriman.
 
 ## 10. Isi pesan
