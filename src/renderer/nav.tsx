@@ -28,3 +28,9 @@ export const SETTINGS_ITEMS: NavItem[] = [
 export function groupOf(key: NavKey): 'settings' | 'top' {
   return SETTINGS_ITEMS.some((i) => i.key === key) ? 'settings' : 'top'
 }
+
+/** Breadcrumb trail for a page: settings pages sit under "Pengaturan". */
+export function crumbsOf(key: NavKey): string[] {
+  const item = [...TOP_ITEMS, ...SETTINGS_ITEMS].find((i) => i.key === key)!
+  return groupOf(key) === 'settings' ? [id.nav.settings, item.label] : [item.label]
+}

@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSettings } from './useSettings'
 import { applyTheme } from './theme'
-import { id } from './i18n/id'
-import { SETTINGS_ITEMS, TOP_ITEMS, type NavKey } from './nav'
+import { SETTINGS_ITEMS, TOP_ITEMS, crumbsOf, groupOf, type NavKey } from './nav'
+import { Sidebar } from './shell/Sidebar'
+import { TopBar } from './shell/TopBar'
 import { LockScreen } from './LockScreen'
 import { AuthContext, useAuth } from './auth-context'
 import { useIdleLock } from './useIdleLock'
@@ -44,6 +45,20 @@ export function App() {
   )
 }
 
+/** True below the desktop breakpoint, where the sidebar becomes a drawer (design-guide §4.3). */
+function useNarrow(): boolean {
+  const query = '(max-width: 991.98px)'
+  const [narrow, setNarrow] = useState(() => !!window.matchMedia?.(query).matches)
+  useEffect(() => {
+    const mq = window.matchMedia?.(query)
+    if (!mq) return
+    const on = (): void => setNarrow(mq.matches)
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [])
+  return narrow
+}
+
 function Shell() {
   const { state, refresh } = useAuth()
   useIdleLock(state.enabled ? state.autoLockMin : 0, () => {
@@ -51,7 +66,10 @@ function Shell() {
   })
   const [page, setPage] = useState<NavKey>('dashboard')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const [settings] = useSettings()
+  const narrow = useNarrow()
+  const menuRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     if (!settings) return
@@ -63,42 +81,42 @@ function Shell() {
     return () => mq.removeEventListener('change', on)
   }, [settings?.theme])
 
+  const closeDrawer = useCallback(() => {
+    setDrawerOpen(false)
+    menuRef.current?.focus()
+  }, [])
+  useEffect(() => {
+    if (!drawerOpen) return
+    const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') closeDrawer() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [drawerOpen, closeDrawer])
+  useEffect(() => { if (!narrow) setDrawerOpen(false) }, [narrow])
+
+  const select = (k: NavKey): void => {
+    setPage(k)
+    if (groupOf(k) === 'settings') setSettingsOpen(true)
+    if (drawerOpen) closeDrawer()
+  }
   const current = [...TOP_ITEMS, ...SETTINGS_ITEMS].find((p) => p.key === page)!
+  const sidebar = (drawer: boolean) => (
+    <Sidebar page={page} onSelect={select} settingsOpen={settingsOpen}
+      onToggleSettings={() => setSettingsOpen((o) => !o)} drawer={drawer} />
+  )
   return (
-    <div className="d-flex vh-100">
-      <nav className="d-flex flex-column p-3 border-end bg-body-tertiary" style={{ width: 220 }}>
-        <div className="fs-5 fw-semibold mb-3"><i className="bi bi-robot me-2" />{id.appName}</div>
-        <ul className="nav nav-pills flex-column mb-auto">
-          {TOP_ITEMS.map((p) => (
-            <li key={p.key} className="nav-item">
-              <button className={`nav-link w-100 text-start ${p.key === page ? 'active' : ''}`}
-                onClick={() => setPage(p.key)}>
-                <i className={`bi ${p.icon} me-2`} />{p.label}
-              </button>
-            </li>
-          ))}
-          <li className="nav-item">
-            <button className="nav-link w-100 text-start d-flex align-items-center" aria-expanded={settingsOpen}
-              onClick={() => setSettingsOpen((o) => !o)}>
-              <i className="bi bi-gear me-2" />{id.nav.settings}
-              <i className={`bi ms-auto ${settingsOpen ? 'bi-chevron-up' : 'bi-chevron-down'}`} />
-            </button>
-            {settingsOpen && (
-              <ul className="nav nav-pills flex-column ms-3 mt-1">
-                {SETTINGS_ITEMS.map((p) => (
-                  <li key={p.key} className="nav-item">
-                    <button className={`nav-link w-100 text-start ${p.key === page ? 'active' : ''}`}
-                      onClick={() => setPage(p.key)}>
-                      <i className={`bi ${p.icon} me-2`} />{p.label}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </li>
-        </ul>
-      </nav>
-      <main className="flex-grow-1 p-4 overflow-auto">{current.view}</main>
+    <div className="app-shell">
+      {!narrow && sidebar(false)}
+      {narrow && drawerOpen && (
+        <>
+          <div className="app-backdrop" data-testid="drawer-backdrop" onClick={closeDrawer} />
+          {sidebar(true)}
+        </>
+      )}
+      <div className="app-main">
+        <TopBar crumbs={crumbsOf(page)} showMenuButton={narrow} onMenu={() => setDrawerOpen(true)} menuRef={menuRef}
+          onGoDashboard={() => select('dashboard')} onGoSecurity={() => select('security')} />
+        <main className="app-content">{current.view}</main>
+      </div>
     </div>
   )
 }
