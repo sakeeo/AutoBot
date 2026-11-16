@@ -30,7 +30,18 @@ const MIGRATIONS: string[] = [
     last_at INTEGER NOT NULL
   );
   `,
-  `ALTER TABLE message_log ADD COLUMN text TEXT;`
+  `ALTER TABLE message_log ADD COLUMN text TEXT;`,
+  `
+  CREATE TABLE brand_versions (
+    version INTEGER PRIMARY KEY,
+    json TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE TABLE brand_draft (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    json TEXT NOT NULL
+  );
+  `
 ]
 
 export function openDb(path: string): Db {
