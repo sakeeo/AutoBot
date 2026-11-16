@@ -172,6 +172,14 @@ const MIGRATIONS: string[] = [
   CREATE INDEX broadcast_sends_campaign ON broadcast_sends(campaign_id, status);
   CREATE INDEX broadcast_sends_sent ON broadcast_sends(sent_at);
   CREATE INDEX broadcast_sends_contact ON broadcast_sends(contact_id);
+  `,
+  `
+  CREATE TABLE broadcast_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL,
+    at INTEGER NOT NULL
+  );
+  CREATE INDEX broadcast_events_kind ON broadcast_events(kind, at);
   `
 ]
 

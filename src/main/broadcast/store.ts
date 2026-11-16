@@ -1,7 +1,9 @@
 import { randomBytes } from 'node:crypto'
 import type { Db } from '../db'
-import type { BContact, ContactStatus, SuppressReason } from '../../shared/broadcast'
+import type { Audience, BContact, Campaign, CampaignKind, CampaignStatus, ContactStatus, SendStatus, SuppressReason } from '../../shared/broadcast'
 import { hashNumber, normalizePhone, numberFromJid } from './identity'
+import { startOfLocalDay, localDay } from './limits'
+import type { Outcome } from './breaker'
 
 interface Row {
   id: number; number: string | null; jid: string | null; name: string; vars: string; source: 'chat' | 'impor'
@@ -177,5 +179,192 @@ export class BroadcastStore {
           .run(c.number ? hashNumber(c.number, salt) : null, c.jid ? hashNumber(c.jid, salt) : null, was.reason, this.clock.now())
       }
     })()
+  }
+
+  // ---- campaigns and the send queue ----
+
+  private toCampaign = (r: {
+    id: number; name: string; kind: CampaignKind; template: string; status: CampaignStatus; pause_reason: string | null
+    created_at: number; started_at: number | null; audience: Audience; not_before: number | null
+  }): Campaign => ({
+    id: r.id, name: r.name, kind: r.kind, template: r.template, status: r.status, pauseReason: r.pause_reason,
+    createdAt: r.created_at, startedAt: r.started_at, audience: r.audience, notBefore: r.not_before
+  })
+
+  createCampaign(c: { name: string; kind: CampaignKind; template: string; audience: Audience; notBefore?: number | null }): Campaign {
+    const r = this.db
+      .prepare('INSERT INTO broadcast_campaigns(name, kind, template, status, audience, not_before, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(c.name, c.kind, c.template, 'draf', c.audience, c.notBefore ?? null, this.clock.now())
+    return this.getCampaign(Number(r.lastInsertRowid))!
+  }
+
+  getCampaign(id: number): Campaign | null {
+    const r = this.db.prepare('SELECT * FROM broadcast_campaigns WHERE id = ?').get(id)
+    return r ? this.toCampaign(r as Parameters<typeof this.toCampaign>[0]) : null
+  }
+
+  listCampaigns(): Campaign[] {
+    return (this.db.prepare('SELECT * FROM broadcast_campaigns ORDER BY id DESC').all() as Parameters<typeof this.toCampaign>[0][]).map(this.toCampaign)
+  }
+
+  setCampaignStatus(id: number, status: CampaignStatus, pauseReason?: string): void {
+    this.db
+      .prepare(
+        `UPDATE broadcast_campaigns SET status = ?, pause_reason = ?,
+           started_at = CASE WHEN ? = 'berjalan' AND started_at IS NULL THEN ? ELSE started_at END WHERE id = ?`
+      )
+      .run(status, status === 'dijeda' ? pauseReason ?? null : null, status, this.clock.now(), id)
+  }
+
+  runningCampaign(): Campaign | null {
+    const r = this.db.prepare("SELECT * FROM broadcast_campaigns WHERE status = 'berjalan' ORDER BY id LIMIT 1").get()
+    return r ? this.toCampaign(r as Parameters<typeof this.toCampaign>[0]) : null
+  }
+
+  nextScheduled(now: number): Campaign | null {
+    const r = this.db
+      .prepare("SELECT * FROM broadcast_campaigns WHERE status = 'terjadwal' AND (not_before IS NULL OR not_before <= ?) ORDER BY id LIMIT 1")
+      .get(now)
+    return r ? this.toCampaign(r as Parameters<typeof this.toCampaign>[0]) : null
+  }
+
+  /** Who a campaign is aimed at, before any send-time rule. A confirmation targets people who have not confirmed yet. */
+  audienceContacts(kind: CampaignKind, audience: Audience): BContact[] {
+    let rows: Row[]
+    if (kind === 'konfirmasi') {
+      rows = this.db
+        .prepare(
+          `SELECT * FROM broadcast_contacts c WHERE c.source = 'impor' AND c.status = 'menunggu_persetujuan'
+             AND NOT EXISTS (SELECT 1 FROM broadcast_sends s WHERE s.contact_id = c.id AND s.status = 'terkirim') ORDER BY c.id`
+        )
+        .all() as Row[]
+    } else {
+      const sources = audience === 'chat' ? ['chat'] : audience === 'impor' ? ['impor'] : ['chat', 'impor']
+      rows = this.db
+        .prepare(`SELECT * FROM broadcast_contacts WHERE status = 'aktif' AND source IN (${sources.map(() => '?').join(',')}) ORDER BY id`)
+        .all(...sources) as Row[]
+    }
+    return rows.map(toContact)
+  }
+
+  sendCount(campaignId: number): number {
+    return (this.db.prepare('SELECT COUNT(*) AS n FROM broadcast_sends WHERE campaign_id = ?').get(campaignId) as { n: number }).n
+  }
+
+  /** One queued send per recipient; calling it again adds nobody twice. */
+  enqueue(campaignId: number): number {
+    const c = this.getCampaign(campaignId)
+    if (!c) return 0
+    const now = this.clock.now()
+    const ins = this.db.prepare("INSERT INTO broadcast_sends(campaign_id, contact_id, status, created_at) VALUES (?, ?, 'antre', ?)")
+    const has = this.db.prepare('SELECT 1 FROM broadcast_sends WHERE campaign_id = ? AND contact_id = ?')
+    let n = 0
+    this.db.transaction(() => {
+      for (const ct of this.audienceContacts(c.kind, c.audience)) {
+        if (has.get(campaignId, ct.id)) continue
+        ins.run(campaignId, ct.id, now)
+        n++
+      }
+    })()
+    return n
+  }
+
+  nextQueued(campaignId: number): { sendId: number; contact: BContact } | null {
+    const r = this.db
+      .prepare(
+        `SELECT s.id AS send_id, c.* FROM broadcast_sends s JOIN broadcast_contacts c ON c.id = s.contact_id
+         WHERE s.campaign_id = ? AND s.status = 'antre' ORDER BY s.id LIMIT 1`
+      )
+      .get(campaignId) as (Row & { send_id: number }) | undefined
+    return r ? { sendId: r.send_id, contact: toContact(r) } : null
+  }
+
+  recordSend(sendId: number, r: { status: Exclude<SendStatus, 'antre'>; reason?: string; waId?: string | null; at: number }): void {
+    this.db.transaction(() => {
+      this.db
+        .prepare('UPDATE broadcast_sends SET status = ?, reason = ?, wa_id = ?, sent_at = ? WHERE id = ?')
+        .run(r.status, r.reason ?? null, r.waId ?? null, r.status === 'terkirim' ? r.at : null, sendId)
+      if (r.status === 'terkirim')
+        this.db
+          .prepare('UPDATE broadcast_contacts SET last_sent_at = ?, sent_count = sent_count + 1 WHERE id = (SELECT contact_id FROM broadcast_sends WHERE id = ?)')
+          .run(r.at, sendId)
+    })()
+  }
+
+  skipRemaining(campaignId: number, reason: string): void {
+    this.db.prepare("UPDATE broadcast_sends SET status = 'dilewati', reason = ? WHERE campaign_id = ? AND status = 'antre'").run(reason, campaignId)
+  }
+
+  progress(campaignId: number): Record<SendStatus, number> {
+    const out: Record<SendStatus, number> = { antre: 0, terkirim: 0, gagal: 0, dilewati: 0 }
+    for (const r of this.db.prepare('SELECT status, COUNT(*) AS n FROM broadcast_sends WHERE campaign_id = ? GROUP BY status').all(campaignId) as { status: SendStatus; n: number }[])
+      out[r.status] = r.n
+    return out
+  }
+
+  /** Every limit is counted from what was really sent, so a restart cannot reset it. */
+  counters(now: number, timezone: string): {
+    sentToday: number; sentThisHour: number; newToday: number; sendDays: string[]; lastSentAt: number | null
+  } {
+    const sent = (this.db.prepare("SELECT sent_at FROM broadcast_sends WHERE status = 'terkirim' ORDER BY sent_at").all() as { sent_at: number }[]).map((r) => r.sent_at)
+    const dayStart = startOfLocalDay(now, timezone)
+    const firstSends = this.db
+      .prepare("SELECT MIN(sent_at) AS m FROM broadcast_sends WHERE status = 'terkirim' GROUP BY contact_id")
+      .all() as { m: number }[]
+    return {
+      sentToday: sent.filter((t) => t >= dayStart).length,
+      sentThisHour: sent.filter((t) => t > now - 3_600_000).length,
+      newToday: firstSends.filter((r) => r.m >= dayStart).length,
+      sendDays: [...new Set(sent.map((t) => localDay(t, timezone)))],
+      lastSentAt: sent.length ? sent[sent.length - 1] : null
+    }
+  }
+
+  contactHistory(contactId: number, now: number): { lastSentAt: number | null; sentLast30d: number; neverSent: boolean } {
+    const r = this.db
+      .prepare(
+        `SELECT MAX(sent_at) AS last, COUNT(*) AS total, SUM(CASE WHEN sent_at >= ? THEN 1 ELSE 0 END) AS recent
+         FROM broadcast_sends WHERE contact_id = ? AND status = 'terkirim'`
+      )
+      .get(now - 30 * 86_400_000, contactId) as { last: number | null; total: number; recent: number | null }
+    return { lastSentAt: r.last, sentLast30d: r.recent ?? 0, neverSent: r.total === 0 }
+  }
+
+  /** Has this person ever been sent a broadcast or a confirmation? */
+  wasSentTo(key: Key): boolean {
+    const c = this.findContact(key)
+    if (!c) return false
+    return !!this.db.prepare("SELECT 1 FROM broadcast_sends WHERE contact_id = ? AND status = 'terkirim' LIMIT 1").get(c.id)
+  }
+
+  recentOutcomes(limit: number): Outcome[] {
+    const rows = this.db
+      .prepare(
+        `SELECT s.status, COALESCE(s.sent_at, s.created_at) AS at, k.kind AS kind, c.source AS source
+         FROM broadcast_sends s JOIN broadcast_campaigns k ON k.id = s.campaign_id JOIN broadcast_contacts c ON c.id = s.contact_id
+         WHERE s.status IN ('terkirim', 'gagal') ORDER BY s.id DESC LIMIT ?`
+      )
+      .all(limit) as { status: string; at: number; kind: CampaignKind; source: 'chat' | 'impor' }[]
+    return rows.reverse().map((r) => ({ at: r.at, ok: r.status === 'terkirim', kind: r.kind, toNonChat: r.source === 'impor' }))
+  }
+
+  addEvent(kind: 'optout' | 'complaint', at: number): void {
+    this.db.prepare('INSERT INTO broadcast_events(kind, at) VALUES (?, ?)').run(kind, at)
+  }
+
+  eventsSince(kind: 'optout' | 'complaint', since: number): number {
+    return (this.db.prepare('SELECT COUNT(*) AS n FROM broadcast_events WHERE kind = ? AND at >= ?').get(kind, since) as { n: number }).n
+  }
+
+  /** Imported contacts who answered after being messaged. */
+  repliesFromImported(): number {
+    return (
+      this.db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM broadcast_contacts c WHERE c.source = 'impor' AND c.last_inbound_at IS NOT NULL
+             AND EXISTS (SELECT 1 FROM broadcast_sends s WHERE s.contact_id = c.id AND s.status = 'terkirim' AND s.sent_at <= c.last_inbound_at)`
+        )
+        .get() as { n: number }
+    ).n
   }
 }

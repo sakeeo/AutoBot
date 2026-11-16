@@ -89,3 +89,15 @@ export function nextDayWindowStart(now: number, w: Window): number {
   const s = minutesOf(w.start)
   return Date.UTC(z.y, z.mo - 1, z.d + 1, Math.floor(s / 60), s % 60) - z.offset
 }
+
+/** 'YYYY-MM-DD' of `ms` in the given zone. */
+export function localDay(ms: number, timezone: string): string {
+  const z = zoned(ms, timezone)
+  return `${z.y}-${String(z.mo).padStart(2, '0')}-${String(z.d).padStart(2, '0')}`
+}
+
+/** Midnight (start of the local day) of `ms` in the given zone, as a timestamp. */
+export function startOfLocalDay(ms: number, timezone: string): number {
+  const z = zoned(ms, timezone)
+  return Date.UTC(z.y, z.mo - 1, z.d) - z.offset
+}
