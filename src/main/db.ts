@@ -108,6 +108,70 @@ const MIGRATIONS: string[] = [
     created_at INTEGER NOT NULL
   );
   CREATE INDEX messages_chat ON messages(chat_id, id);
+  `,
+  `
+  CREATE TABLE broadcast_state (k TEXT PRIMARY KEY, v TEXT NOT NULL);
+  CREATE TABLE broadcast_imports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_note TEXT NOT NULL,
+    attested_at INTEGER NOT NULL,
+    total INTEGER NOT NULL DEFAULT 0,
+    valid INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+  );
+  CREATE TABLE broadcast_contacts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    number TEXT UNIQUE,
+    jid TEXT UNIQUE,
+    name TEXT NOT NULL DEFAULT '',
+    vars TEXT NOT NULL DEFAULT '{}',
+    source TEXT NOT NULL,
+    status TEXT NOT NULL,
+    last_inbound_at INTEGER,
+    last_sent_at INTEGER,
+    sent_count INTEGER NOT NULL DEFAULT 0,
+    import_id INTEGER,
+    created_at INTEGER NOT NULL
+  );
+  CREATE TABLE broadcast_suppress (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    number TEXT,
+    jid TEXT,
+    hash TEXT,
+    jid_hash TEXT,
+    reason TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX broadcast_suppress_number ON broadcast_suppress(number);
+  CREATE INDEX broadcast_suppress_jid ON broadcast_suppress(jid);
+  CREATE INDEX broadcast_suppress_hash ON broadcast_suppress(hash);
+  CREATE INDEX broadcast_suppress_jid_hash ON broadcast_suppress(jid_hash);
+  CREATE TABLE broadcast_campaigns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    template TEXT NOT NULL,
+    status TEXT NOT NULL,
+    pause_reason TEXT,
+    audience TEXT NOT NULL,
+    not_before INTEGER,
+    created_at INTEGER NOT NULL,
+    started_at INTEGER
+  );
+  CREATE TABLE broadcast_sends (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    campaign_id INTEGER NOT NULL,
+    contact_id INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    reason TEXT,
+    scheduled_for INTEGER,
+    sent_at INTEGER,
+    wa_id TEXT,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX broadcast_sends_campaign ON broadcast_sends(campaign_id, status);
+  CREATE INDEX broadcast_sends_sent ON broadcast_sends(sent_at);
+  CREATE INDEX broadcast_sends_contact ON broadcast_sends(contact_id);
   `
 ]
 
