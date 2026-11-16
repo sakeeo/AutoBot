@@ -37,19 +37,26 @@ Tiga status dasar persetujuan, disimpan per kontak dengan alasan dan waktu:
 | Impor | Pengguna mengakui punya persetujuan (pernyataan wajib + keterangan sumber) | **Konfirmasi dua langkah**: kontak lebih dulu menerima satu pesan konfirmasi dan baru layak setelah membalas |
 | Tolak | Kontak berhenti berlangganan, dilaporkan, atau tidak terdaftar | Tidak pernah dikirimi broadcast |
 
+### 6.0 Identitas kontak
+- Kunci kontak untuk broadcast adalah **nomor telepon ternormalisasi** (`62…`). Kontak chat yang id-nya `@lid` dan nomornya tidak diketahui **dikecualikan** dari broadcast (dilewati dengan alasan "nomor tidak diketahui"); tidak ada tebakan.
+- Daftar tolak menyimpan **kedua** pengenal bila diketahui (nomor dan JID/LID) dan keduanya diperiksa saat kirim. Hasil `onWhatsApp` untuk nomor impor yang JID-nya sama dengan JID tertolak juga dianggap tertolak.
+
 ### 6.1 Impor
 - CSV/XLSX dengan kolom `nomor` (wajib), `nama` (opsional), dan variabel lain (opsional). Nomor dinormalisasi (`0…` → `62…`), digandakan dibuang, format tak valid ditolak dengan laporan.
 - **Pernyataan wajib** sebelum impor: "Saya memiliki persetujuan dari semua nomor dalam daftar ini untuk menerima pesan dari bisnis saya", ditambah kolom **keterangan sumber** (min. 10 karakter, mis. "Formulir pendaftaran website, Okt 2026"). Disimpan bersama lot impor (waktu, jumlah, sumber).
 - Validasi `onWhatsApp` dalam kelompok kecil dengan jeda; nomor yang tidak terdaftar dibuang. Bila >30% nomor tidak terdaftar, impor dihentikan dengan peringatan kualitas daftar.
 - Kontak impor berstatus `menunggu_persetujuan`. Pesan konfirmasi (templat wajib memuat nama bisnis, asal data, dan kalimat berhenti) dikirim memakai kuota "kontak baru" harian. Setelah membalas selain kata berhenti → `aktif`. Tanpa balasan dalam 7 hari → `tidak_aktif` (tidak dikirimi apa pun lagi).
+- Pesan konfirmasi **tidak dikirim otomatis** setelah impor. Pengguna melihat "N kontak menunggu konfirmasi" dan menekan **Kirim konfirmasi**, yang membuat kampanye jenis `konfirmasi`. Kampanye ini melewati gerbang, batas harian/jam/pemanasan, kuota kontak baru, jam kirim, jeda batch, tombol Hentikan semua, dan pemutus sirkuit yang sama dengan kampanye lain. Pemutus "tanpa balasan" untuk konfirmasi memakai ambang sendiri: ≥ 20 terkirim dengan 0 balasan → jeda (tanda kualitas daftar buruk).
+- "Kontak baru" = kontak yang menerima pesan broadcast pertamanya (konfirmasi maupun broadcast pertama ke kontak chat).
 
 ### 6.2 Daftar tolak
 - Dasar semua pengecekan, diperiksa saat kirim. Isi: nomor, alasan (`berhenti`, `laporan`, `tidak_terdaftar`, `blokir_manual`, `admin`), waktu.
 - Nomor admin dan nomor bot otomatis masuk.
-- Keluar dari daftar tolak hanya bila **kontak sendiri** membalas "MULAI"; pengguna tidak bisa menghapusnya dari UI. Penghapusan data kontak (hak hapus) tersedia dan membuang kontak dari semua daftar.
+- Keluar dari daftar tolak hanya bila **kontak sendiri** membalas "MULAI"; pengguna tidak bisa menghapusnya dari UI. Penghapusan data kontak (hak hapus) membuang nama, pesan, dan riwayatnya, tetapi **kontak yang pernah berhenti berlangganan meninggalkan catatan minimal** (hash SHA-256 nomor dengan garam khusus instalasi + alasan + waktu) agar tidak bisa dikirimi lagi setelah diimpor ulang.
 
 ## 7. Berhenti berlangganan
 - Setiap pesan broadcast **otomatis** diberi kaki: "Balas BERHENTI untuk tidak menerima pesan ini lagi." Tidak dapat dihapus atau diubah menjadi tersembunyi.
+- **Cakupan:** penangan berjalan pada semua mode jawaban (ekstraktif dan AI), tidak pada grup, dan tetap berjalan saat saklar global Broadcast mati (pencatatan berhenti tidak boleh terlewat). Pesan "berhenti" dari orang yang **belum pernah menerima broadcast/konfirmasi** diteruskan ke agen seperti biasa (perilaku bot tidak berubah), tetapi tetap dicatat diam-diam sebagai **tolak lunak**: gerbang menganggapnya tertolak selama 365 hari tanpa membalas. Bila chat sedang diambil alih manusia, pencatatan tetap terjadi tetapi balasan konfirmasi otomatis tidak dikirim.
 - Sebelum agen memproses pesan masuk, penangan khusus memeriksa kata kunci pesan pendek (≤ 40 karakter, seluruh pesan): `berhenti`, `stop`, `unsubscribe`, `batal langganan`, `jangan kirim lagi`, dll. → masuk daftar tolak, balasan konfirmasi sekali ("Baik, Anda tidak akan menerima pesan promosi lagi. Balas MULAI untuk berlangganan kembali."), pesan **tidak** diteruskan ke agen. `mulai`/`start` mengeluarkan dari daftar tolak.
 - Kata berisiko tinggi (`spam`, `laporkan`, `penipu`) → daftar tolak + notifikasi admin + dihitung sebagai sinyal bahaya.
 - Kalimat panjang yang kebetulan memuat "stop" ("jangan stop dulu ya") tidak memicu apa pun; tes khusus untuk kasus ini.
@@ -63,13 +70,15 @@ Semua angka adalah **keputusan saya** (alasan: pola umum untuk nomor baru; bisa 
 | Berkembang (30–90 hari) | 80 | 15 |
 | Mapan (> 90 hari) | 200 | 30 |
 
-- **Pemanasan**: hari aktif pertama maksimal 10 pesan, naik 25% per hari aktif sampai batas tingkat. Hari tanpa broadcast tidak mengulang pemanasan; jeda >14 hari mengulang dari awal.
+- **Tingkat tidak bisa dinaikkan manual.** Pengguna menyatakan usia nomor **sekali** saat pengaturan awal; usia efektif = usia yang dinyatakan + hari yang sudah berlalu, sehingga tingkat naik dengan sendirinya. Menurunkan tingkat bebas; menaikkan hanya lewat "Saya mengganti nomor", yang meminta konfirmasi dan mengulang pemanasan.
+- **Pemanasan berlaku untuk semua tingkat pada pemakaian pertama**: hari aktif pertama maksimal 10 pesan, naik 25% per hari aktif sampai batas tingkat. Hari tanpa broadcast tidak mengulang pemanasan; jeda >14 hari mengulang dari awal.
 - Maks 15 pesan/jam; setelah tiap 10 pesan jeda 3–8 menit.
 - **Jeda antarpesan acak 20–60 detik** (lebih konservatif daripada 5–15 detik di PRD; ini tentang laju, bukan penyamaran) plus indikator mengetik 2–5 detik yang sudah ada.
 - **Jam kirim**: bawaan 09:00–20:00 zona waktu profil; di luar jam itu antrean menunggu.
 - **Per kontak**: minimal 7 hari antarbroadcast (dapat dikecilkan sampai 3), maksimal 4 per 30 hari.
 - Broadcast **mengalah** pada balasan bot: tidak mengirim sementara ada balasan untuk pelanggan yang sedang diproses.
 - Kampanye lebih besar dari kuota hari itu otomatis berlanjut di hari berikutnya dalam jam kirim.
+- **Satu kampanye aktif dalam satu waktu.** Kampanye lain (termasuk konfirmasi) menunggu antrean berurutan (`terjadwal`); memulai yang kedua tidak melewati antrean.
 
 ## 9. Pemutus sirkuit (berhenti sendiri)
 Kampanye berjalan → `dijeda` (tidak pernah lanjut otomatis; lanjut perlu tindakan pengguna) dengan alasan jelas dan notifikasi bila:
@@ -94,6 +103,7 @@ Menu **Broadcast** (di bawah Pesan), empat tab:
 Saat berjalan: kartu progres, **Jeda**, **Hentikan**, dan **Hentikan semua**. Memulai/mengubah kampanye butuh aplikasi tidak terkunci; kampanye yang sudah berjalan tetap berjalan saat terkunci.
 
 ## 12. Rancangan teknis
+- **Sumber audiens Chat:** gabungan `message_log` (sejak MVP) dan `messages` (pesan masuk terakhir ≤ 365 hari). Riwayat WhatsApp lama tidak diambil ulang pada versi pertama, sehingga audiens Chat mencerminkan pesan yang tercatat aplikasi; UI menyatakannya.
 - Tabel baru: `broadcast_contacts` (jid, nomor, nama, sumber, dasar, status, last_inbound_at, last_sent_at, jumlah terkirim), `broadcast_imports` (lot, sumber, pernyataan, waktu), `broadcast_suppress`, `broadcast_campaigns`, `broadcast_sends` (kampanye, kontak, status, alasan, jadwal, waktu kirim, id WA), `broadcast_state` (tingkat, awal pemanasan, penghitung harian).
 - `BroadcastGate.check(contact, ctx): allow | wait(until) | skip(reason) | halt(reason)` — fungsi murni dengan jam yang disuntik; semua aturan bagian 6–9 ada di sini dan diuji tanpa Electron.
 - `BroadcastEngine`: pemroses tunggal; tiap tik mengambil pengiriman jatuh tempo berikutnya, menjalankan gerbang, mengirim lewat `WaGateway.sendText`, mencatat hasil; memutus sirkuit.
@@ -114,3 +124,14 @@ Saat berjalan: kartu progres, **Jeda**, **Hentikan**, dan **Hentikan semua**. Me
 - Nilai ambang (batas tingkat, rasio pemutus) adalah tebakan terinformasi, bukan data WhatsApp; ditandai dapat disetel di bawah batas keras dan perlu dikalibrasi setelah pemakaian nyata.
 - Perilaku Baileys (`onWhatsApp`, kode galat kirim, jid `@lid`) hanya bisa diuji sebenarnya di Electron dengan nomor sekunder; masuk daftar uji manual.
 - Pengakuan persetujuan impor bergantung pada kejujuran pengguna; aplikasi hanya bisa membuatnya eksplisit, tercatat, dan dibatasi.
+
+## 15. Keputusan saya (bukan dari permintaan)
+Saya putuskan sendiri dan mohon diperiksa; yang paling berdampak diberi tanda ★.
+- ★ Pesan konfirmasi untuk kontak impor **wajib** (konfirmasi dua langkah): kontak impor baru bisa menerima broadcast setelah membalas. Ini mengorbankan jangkauan demi keamanan.
+- ★ Kontak chat dengan id `@lid` tanpa nomor yang diketahui **tidak** dikirimi broadcast.
+- ★ Pesan "berhenti" dari orang yang belum pernah dikirimi broadcast tetap diteruskan ke agen (tidak ada perubahan perilaku bot), hanya dicatat sebagai tolak lunak.
+- ★ Audiens Chat hanya dari pesan yang tercatat aplikasi (`message_log` + `messages`), tanpa mengambil riwayat WhatsApp lama.
+- Angka batas (tingkat, pemanasan, jeda 20–60 dtk, 15/jam, 7 hari antarbroadcast, jam 09–20) dan ambang pemutus sirkuit.
+- Tingkat nomor tidak bisa dinaikkan manual; hanya naik seiring waktu atau lewat "Saya mengganti nomor".
+- Hanya teks pada versi pertama; satu kampanye aktif sekaligus; kampanye berjalan tetap berjalan saat terkunci tetapi tidak bisa dimulai/diubah.
+- Penghapusan data kontak meninggalkan catatan tolak berhash.
