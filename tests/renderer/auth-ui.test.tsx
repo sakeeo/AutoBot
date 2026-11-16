@@ -16,8 +16,11 @@ const off: AuthState = { enabled: false, locked: false, username: null, autoLock
 const locked: AuthState = { enabled: true, locked: true, username: 'admin', autoLockMin: 0 }
 const open: AuthState = { enabled: true, locked: false, username: 'admin', autoLockMin: 0 }
 
+let lockedCb: (() => void) | null = null
 function setApi(state: AuthState, over: Record<string, unknown> = {}) {
+  lockedCb = null
   const api = {
+    onAuthLocked: vi.fn().mockImplementation((cb: () => void) => { lockedCb = cb; return () => undefined }),
     authState: vi.fn().mockResolvedValue(state),
     authLogin: vi.fn().mockResolvedValue({ ok: true }),
     authLock: vi.fn().mockResolvedValue(undefined),
@@ -111,6 +114,27 @@ describe('lock screen', () => {
     const ev = new Event('unhandledrejection', { cancelable: true })
     Object.assign(ev, { reason: new Error("Error invoking remote method 'log:get': Error: LOCKED") })
     await act(async () => { window.dispatchEvent(ev) })
+    expect(await screen.findByRole('button', { name: 'Masuk' })).toBeTruthy()
+  })
+})
+
+describe('lock pushed by the main process', () => {
+  it('replaces whatever is on screen with the lock screen when main says it locked', async () => {
+    const api = setApi(open)
+    render(<App />)
+    await screen.findByRole('button', { name: /pengaturan/i })
+    api.authState.mockResolvedValue(locked)
+    await act(async () => { lockedCb?.() })
+    expect(await screen.findByRole('button', { name: 'Masuk' })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: /dashboard/i })).toBeNull()
+  })
+
+  it('re-checks the lock when the window regains focus', async () => {
+    const api = setApi(open)
+    render(<App />)
+    await screen.findByRole('button', { name: /pengaturan/i })
+    api.authState.mockResolvedValue(locked)
+    await act(async () => { window.dispatchEvent(new Event('focus')) })
     expect(await screen.findByRole('button', { name: 'Masuk' })).toBeTruthy()
   })
 })

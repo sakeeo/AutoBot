@@ -39,6 +39,7 @@ const api: Api = {
   listPresets: () => ipcRenderer.invoke(C.listPresets),
   loadPreset: (id) => ipcRenderer.invoke(C.loadPreset, id),
   getDashboard: () => ipcRenderer.invoke(C.getDashboard),
+  onAuthLocked: subscribe<void>(C.evtAuthLocked),
   authState: () => ipcRenderer.invoke(C.authState),
   authLogin: (u, p) => ipcRenderer.invoke(C.authLogin, u, p),
   authLock: () => ipcRenderer.invoke(C.authLock),

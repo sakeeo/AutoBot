@@ -36,6 +36,7 @@ export const CHANNELS = {
   authReset: 'auth:reset',
   authDisable: 'auth:disable',
   authSetAutoLock: 'auth:set-auto-lock',
+  evtAuthLocked: 'evt:auth-locked',
   evtStatus: 'evt:status',
   evtIndexStatus: 'evt:index-status',
   evtEscalate: 'evt:escalate',

@@ -14,6 +14,15 @@ export function App() {
   const refresh = useCallback(async () => setAuth(await window.api.authState()), [])
   useEffect(() => { refresh() }, [refresh])
   useEffect(() => {
+    // Main tells us the moment it locks (e.g. window hidden to the tray); focus is a backup check.
+    const off = window.api.onAuthLocked(() => { refresh() })
+    window.addEventListener('focus', refresh)
+    return () => {
+      off()
+      window.removeEventListener('focus', refresh)
+    }
+  }, [refresh])
+  useEffect(() => {
     // The main process refuses data calls with LOCKED when the lock engaged behind the UI's back.
     const onReject = (e: Event): void => {
       const reason = (e as PromiseRejectionEvent).reason

@@ -19,6 +19,22 @@ export function guardHandler<A extends unknown[], R>(
   }
 }
 
+/** Pushes to the window; while locked only the lock event itself may pass, so nothing leaks to a locked UI. */
+export function lockAwareSend(
+  isLocked: () => boolean,
+  send: (channel: string, payload: unknown) => void
+): (channel: string, payload: unknown) => void {
+  return (channel, payload) => {
+    if (isLocked() && channel !== CHANNELS.evtAuthLocked) return
+    send(channel, payload)
+  }
+}
+
+/** OS notifications are visible even on a locked screen, so they show generic text then. */
+export function redactWhenLocked(isLocked: () => boolean, real: string, generic: string): string {
+  return isLocked() ? generic : real
+}
+
 const Text = z.string().max(200)
 const Minutes = z.number().finite()
 
@@ -35,7 +51,7 @@ export interface AuthHandlers {
   authSetAutoLock(min: unknown): void
 }
 
-export function createAuthHandlers(auth: AuthStore): AuthHandlers {
+export function createAuthHandlers(auth: AuthStore, onLocked: () => void = () => undefined): AuthHandlers {
   let locked = auth.isEnabled()
   const bad = { ok: false, error: 'bad' } as const
   const invalid = { ok: false, error: 'invalid' } as const
@@ -49,7 +65,11 @@ export function createAuthHandlers(auth: AuthStore): AuthHandlers {
 
   return {
     isLocked: () => locked,
-    lock: () => { if (auth.isEnabled()) locked = true },
+    lock: () => {
+      if (!auth.isEnabled() || locked) return
+      locked = true
+      onLocked()
+    },
     authState: () => ({ enabled: auth.isEnabled(), locked, username: auth.username(), autoLockMin: auth.autoLockMin() }),
     authLock() { this.lock() },
 

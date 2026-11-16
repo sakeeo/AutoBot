@@ -15,6 +15,7 @@ const period = { replied: 0, refused: 0, handoff: 0, errors: 0, links: 0 }
 function setApi() {
   const draft = structuredClone(PRESETS.toko_online)
   const api = {
+    onAuthLocked: vi.fn().mockReturnValue(() => undefined),
     authState: vi.fn().mockResolvedValue({ enabled: false, locked: false, username: null, autoLockMin: 0 }),
     getStatus: vi.fn().mockResolvedValue({ state: 'disconnected' }),
     onStatus: vi.fn().mockReturnValue(() => undefined),

@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { describe, it, expect, vi } from 'vitest'
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { AuthStore } from '../src/main/auth/auth-store'
 import { makeDir } from './helpers/fixtures'
@@ -128,5 +128,62 @@ describe('AuthStore', () => {
     const s = new AuthStore(file, clock)
     expect(s.isEnabled()).toBe(false)
     expect(s.username()).toBeNull()
+  })
+})
+
+describe('AuthStore durability', () => {
+  const clock = { now: () => 1_000_000 }
+  // A directory squatting on the temp-file path makes every save fail, like a full disk would.
+  const breakSaves = (file: string) => mkdirSync(file + '.tmp')
+
+  it('a failed save during setup throws and leaves login disabled', () => {
+    const file = join(makeDir(), 'auth.json')
+    breakSaves(file)
+    const s = new AuthStore(file, clock)
+    expect(() => s.setup('admin', 'rahasia-123')).toThrow()
+    expect(s.isEnabled()).toBe(false)
+  })
+
+  it('a failed save during reset keeps the old password and the old recovery code', () => {
+    const file = join(makeDir(), 'auth.json')
+    const s = new AuthStore(file, clock)
+    const { recoveryCode } = s.setup('admin', 'rahasia-123')
+    breakSaves(file)
+    expect(() => s.reset(recoveryCode, 'baru-baru-1')).toThrow()
+    expect(s.verify('admin', 'rahasia-123')).toBe('ok')
+    rmdirSync(file + '.tmp')
+    expect(s.reset(recoveryCode, 'baru-baru-1')).not.toBe('bad')
+  })
+
+  it('a failed save during setAutoLockMin or changePassword changes nothing in memory', () => {
+    const file = join(makeDir(), 'auth.json')
+    const s = new AuthStore(file, clock)
+    s.setup('admin', 'rahasia-123')
+    breakSaves(file)
+    expect(() => s.setAutoLockMin(9)).toThrow()
+    expect(s.autoLockMin()).toBe(0)
+    expect(() => s.changePassword('rahasia-123', 'baru-baru-1')).toThrow()
+    expect(s.verify('admin', 'rahasia-123')).toBe('ok')
+  })
+
+  it('writes through a temp file: no leftovers and a complete JSON file after saves', () => {
+    const dir = makeDir()
+    const file = join(dir, 'auth.json')
+    const s = new AuthStore(file, clock)
+    s.setup('admin', 'rahasia-123')
+    s.setAutoLockMin(7)
+    expect(readdirSync(dir)).toEqual(['auth.json'])
+    expect(() => JSON.parse(readFileSync(file, 'utf8'))).not.toThrow()
+  })
+
+  it('warns when an existing auth file cannot be used, instead of silently disabling login', () => {
+    const file = join(makeDir(), 'auth.json')
+    writeFileSync(file, '{not json')
+    const warn = vi.fn()
+    expect(new AuthStore(file, clock, warn).isEnabled()).toBe(false)
+    expect(warn).toHaveBeenCalledTimes(1)
+    const none = vi.fn()
+    new AuthStore(join(makeDir(), 'missing.json'), clock, none)
+    expect(none).not.toHaveBeenCalled()
   })
 })

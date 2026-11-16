@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { join } from 'node:path'
 import { AuthStore } from '../src/main/auth/auth-store'
-import { AUTH_CHANNELS, createAuthHandlers, guardHandler } from '../src/main/auth/auth-ipc'
+import { AUTH_CHANNELS, createAuthHandlers, guardHandler, lockAwareSend, redactWhenLocked } from '../src/main/auth/auth-ipc'
 import { CHANNELS } from '../src/shared/channels'
 import { makeDir } from './helpers/fixtures'
 
@@ -107,5 +107,40 @@ describe('guardHandler and AUTH_CHANNELS', () => {
     expect(auth.length).toBe(8)
     expect([...AUTH_CHANNELS].sort()).toEqual([...auth].sort())
     expect(AUTH_CHANNELS.has(CHANNELS.getLog)).toBe(false)
+  })
+})
+
+describe('lock notifications and event gating', () => {
+  it('tells the window when the lock engages, but not when login is off or already locked', () => {
+    const onLocked = vi.fn()
+    const auth = new AuthStore(join(makeDir(), 'auth.json'), { now: () => 1 })
+    const h = createAuthHandlers(auth, onLocked)
+    h.lock()
+    expect(onLocked).not.toHaveBeenCalled()
+    h.authSetup('admin', 'rahasia-123')
+    h.authLock()
+    expect(onLocked).toHaveBeenCalledTimes(1)
+    h.lock()
+    expect(onLocked).toHaveBeenCalledTimes(1)
+  })
+
+  it('lockAwareSend drops data events while locked and always lets the lock event through', () => {
+    const raw = vi.fn()
+    let locked = true
+    const send = lockAwareSend(() => locked, raw)
+    send(CHANNELS.evtEscalate, { text: 'rahasia' })
+    send(CHANNELS.evtHandoff, { summary: 'rahasia' })
+    send(CHANNELS.evtStatus, { state: 'waiting_qr', qr: 'QR' })
+    expect(raw).not.toHaveBeenCalled()
+    send(CHANNELS.evtAuthLocked, null)
+    expect(raw).toHaveBeenCalledTimes(1)
+    locked = false
+    send(CHANNELS.evtEscalate, { text: 'halo' })
+    expect(raw).toHaveBeenCalledTimes(2)
+  })
+
+  it('redactWhenLocked shows generic text while locked', () => {
+    expect(redactWhenLocked(() => true, 'isi pesan pelanggan', 'Ada pesan baru')).toBe('Ada pesan baru')
+    expect(redactWhenLocked(() => false, 'isi pesan pelanggan', 'Ada pesan baru')).toBe('isi pesan pelanggan')
   })
 })

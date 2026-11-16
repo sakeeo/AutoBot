@@ -1,5 +1,5 @@
 import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeSync } from 'node:fs'
 import { dirname } from 'node:path'
 
 export const MIN_PASSWORD = 8
@@ -44,7 +44,11 @@ export class AuthStore {
   private fails = 0
   private blockedUntil = 0
 
-  constructor(private file: string, private clock: { now(): number }) {
+  constructor(
+    private file: string,
+    private clock: { now(): number },
+    private warn: (message: string) => void = () => undefined
+  ) {
     this.data = this.load()
   }
 
@@ -52,16 +56,33 @@ export class AuthStore {
     if (!existsSync(this.file)) return null
     try {
       const d = JSON.parse(readFileSync(this.file, 'utf8')) as AuthFile
-      if (typeof d.username !== 'string' || !d.password?.hash || !d.recovery?.hash) return null
+      if (typeof d.username !== 'string' || !d.password?.hash || !d.recovery?.hash) throw new Error('incomplete')
       return { ...d, autoLockMin: Number.isFinite(d.autoLockMin) ? d.autoLockMin : 0 }
     } catch {
+      // Treated as "login off" so a damaged file never locks the owner out for good, but never silently.
+      this.warn(`auth file ${this.file} is unreadable; login is disabled until it is set up again`)
       return null
     }
   }
 
-  private save(): void {
+  /** Writes next to the file, flushes, then renames over it, so a crash never leaves a half-written file. */
+  private persist(next: AuthFile): void {
     mkdirSync(dirname(this.file), { recursive: true })
-    writeFileSync(this.file, JSON.stringify(this.data), { mode: 0o600 })
+    const tmp = this.file + '.tmp'
+    const fd = openSync(tmp, 'w', 0o600)
+    try {
+      writeSync(fd, JSON.stringify(next))
+      fsyncSync(fd)
+    } finally {
+      closeSync(fd)
+    }
+    renameSync(tmp, this.file)
+  }
+
+  /** Memory only changes after the disk did. */
+  private commit(next: AuthFile): void {
+    this.persist(next)
+    this.data = next
   }
 
   /** Counts every attempt against one shared limit so no endpoint can be used to guess faster. */
@@ -88,8 +109,7 @@ export class AuthStore {
     if (!name || name.length > 40) throw new Error('INVALID_INPUT')
     checkPassword(password)
     const recoveryCode = newRecoveryCode()
-    this.data = { username: name, password: makeSecret(password), recovery: makeSecret(normalizeCode(recoveryCode)), autoLockMin: 0 }
-    this.save()
+    this.commit({ username: name, password: makeSecret(password), recovery: makeSecret(normalizeCode(recoveryCode)), autoLockMin: 0 })
     return { recoveryCode }
   }
 
@@ -108,10 +128,7 @@ export class AuthStore {
     if (!d) return 'bad'
     checkPassword(newPassword)
     const r = this.attempt(() => matches(oldPassword, d.password))
-    if (r === 'ok') {
-      d.password = makeSecret(newPassword)
-      this.save()
-    }
+    if (r === 'ok') this.commit({ ...d, password: makeSecret(newPassword) })
     return r
   }
 
@@ -122,9 +139,7 @@ export class AuthStore {
     const r = this.attempt(() => matches(normalizeCode(recoveryCode), d.recovery))
     if (r !== 'ok') return r
     const next = newRecoveryCode()
-    d.password = makeSecret(newPassword)
-    d.recovery = makeSecret(normalizeCode(next))
-    this.save()
+    this.commit({ ...d, password: makeSecret(newPassword), recovery: makeSecret(normalizeCode(next)) })
     return { recoveryCode: next }
   }
 
@@ -133,15 +148,14 @@ export class AuthStore {
     if (!d) return 'bad'
     const r = this.attempt(() => matches(password, d.password))
     if (r === 'ok') {
-      this.data = null
       rmSync(this.file, { force: true })
+      this.data = null
     }
     return r
   }
 
   setAutoLockMin(min: number): void {
     if (!this.data) return
-    this.data.autoLockMin = Math.min(240, Math.max(0, Math.round(min)))
-    this.save()
+    this.commit({ ...this.data, autoLockMin: Math.min(240, Math.max(0, Math.round(min))) })
   }
 }

@@ -136,6 +136,7 @@ export interface Api {
   listPresets(): Promise<{ id: string; label: string }[]>
   loadPreset(id: string): Promise<{ ok: boolean; issues: Issue[]; error?: string }>
   getDashboard(): Promise<DashboardData>
+  onAuthLocked(cb: () => void): () => void
   authState(): Promise<AuthState>
   authLogin(username: string, password: string): Promise<AuthResult>
   authLock(): Promise<void>

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Notification, safeStorage } from 'electron'
+import { app, BrowserWindow, Menu, Notification, safeStorage } from 'electron'
 import { existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import pino from 'pino'
@@ -19,7 +19,7 @@ import { secretNameFor } from '../shared/providers'
 import { registerIpc } from './ipc'
 import { createBrandHandlers } from './brand-ipc'
 import { AuthStore } from './auth/auth-store'
-import { createAuthHandlers, type AuthHandlers } from './auth/auth-ipc'
+import { createAuthHandlers, lockAwareSend, redactWhenLocked, type AuthHandlers } from './auth/auth-ipc'
 import { createTray } from './tray'
 import { CHANNELS as C } from '../shared/channels'
 import type { ConnStatus } from '../shared/types'
@@ -46,9 +46,12 @@ function createWindow(): BrowserWindow {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true
+      sandbox: true,
+      devTools: !app.isPackaged
     }
   })
+  // Any window created later (second launch after closing without a tray) must start locked too.
+  authHandlers?.lock()
   w.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   w.webContents.on('will-navigate', (e) => e.preventDefault())
   if (process.env['ELECTRON_RENDERER_URL']) w.loadURL(process.env['ELECTRON_RENDERER_URL'])
@@ -117,9 +120,12 @@ function boot(): void {
   })
 
   let status: ConnStatus = { state: 'disconnected' }
-  const send = (channel: string, payload: unknown): void => {
+  const rawSend = (channel: string, payload: unknown): void => {
     if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
   }
+  const isLocked = (): boolean => authHandlers?.isLocked() ?? false
+  // While locked, only the lock event may reach the window; data events would leak to DevTools or the lock screen.
+  const send = lockAwareSend(isLocked, rawSend)
   const tray = createTray({ iconPath: join(__dirname, '../../resources/tray.png'), showWindow })
   trayActive = tray !== null
   const STATUS_LABEL: Record<ConnStatus['state'], string> = {
@@ -137,12 +143,12 @@ function boot(): void {
   pipeline.on('escalate', (m: { chatId: string; text: string | null }) => {
     send(C.evtEscalate, { chatId: m.chatId, text: m.text })
     if (Notification.isSupported())
-      new Notification({ title: 'Perlu dibalas manual', body: (m.text ?? '').slice(0, 120) }).show()
+      new Notification({ title: 'Perlu dibalas manual', body: redactWhenLocked(isLocked, (m.text ?? '').slice(0, 120), 'Ada pesan yang perlu dibalas') }).show()
   })
   handoff.on('handoff', (e: { chatId: string; reason: string; summary: string }) => {
     send(C.evtHandoff, { chatId: e.chatId, reason: e.reason, summary: e.summary })
     if (Notification.isSupported())
-      new Notification({ title: 'Pelanggan diserahkan ke admin', body: `${e.chatId.split('@')[0]} · ${e.reason}` }).show()
+      new Notification({ title: 'Pelanggan diserahkan ke admin', body: redactWhenLocked(isLocked, `${e.chatId.split('@')[0]} · ${e.reason}`, 'Buka aplikasi untuk melihat detail') }).show()
   })
   pipeline.start()
 
@@ -162,7 +168,10 @@ function boot(): void {
     }
   })
 
-  authHandlers = createAuthHandlers(new AuthStore(join(data, 'auth.json'), clock))
+  authHandlers = createAuthHandlers(
+    new AuthStore(join(data, 'auth.json'), clock, (msg) => logger.warn(msg)),
+    () => rawSend(C.evtAuthLocked, null)
+  )
 
   registerIpc({
     brandHandlers,
@@ -188,6 +197,7 @@ if (!gotLock) {
   app.on('second-instance', () => showWindow())
   app.on('before-quit', () => { quitting = true })
   app.whenReady().then(() => {
+    if (app.isPackaged) Menu.setApplicationMenu(null)
     boot()
     win = createWindow()
   })
