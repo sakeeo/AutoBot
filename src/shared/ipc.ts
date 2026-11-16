@@ -45,6 +45,15 @@ export const ApiKeySchema = z.string().trim().min(10).max(500)
 export const QuestionSchema = z.string().trim().min(1).max(2000)
 export const LimitSchema = z.number().int().min(1).max(500)
 
+export interface DashboardPeriod { replied: number; refused: number; handoff: number; errors: number; links: number }
+export interface DashboardData {
+  today: DashboardPeriod
+  week: DashboardPeriod
+  waitingAdmin: number
+  recent: LogRow[]
+  files: { indexed: number; failed: number }
+}
+
 export interface FileInfo {
   file: string
   status: 'indexed' | 'failed'
@@ -126,6 +135,7 @@ export interface Api {
   previewChat(input: { draft: boolean; messages: string[] }): Promise<PreviewChatResult>
   listPresets(): Promise<{ id: string; label: string }[]>
   loadPreset(id: string): Promise<{ ok: boolean; issues: Issue[]; error?: string }>
+  getDashboard(): Promise<DashboardData>
   authState(): Promise<AuthState>
   authLogin(username: string, password: string): Promise<AuthResult>
   authLock(): Promise<void>

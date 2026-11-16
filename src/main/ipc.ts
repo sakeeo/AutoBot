@@ -9,6 +9,7 @@ import type { WaGateway } from './wa/gateway'
 import type { ConnStatus, Settings } from '../shared/types'
 import { CHANNELS as C } from '../shared/channels'
 import { ApiKeySchema, LimitSchema, QuestionSchema, SettingsPatchSchema, type LogRow } from '../shared/ipc'
+import { buildDashboard } from './stats'
 import { saveApiKey } from './ai-key'
 import type { BrandHandlers } from './brand-ipc'
 import { AUTH_CHANNELS, guardHandler, type AuthHandlers } from './auth/auth-ipc'
@@ -110,6 +111,8 @@ export function registerIpc(d: IpcDeps): void {
       )
       .all(LimitSchema.parse(limit)) as LogRow[]
   )
+
+  handle(C.getDashboard, () => buildDashboard(d.db, Date.now()))
 
   const a = d.auth
   handle(C.authState, () => a.authState())

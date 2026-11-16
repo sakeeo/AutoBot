@@ -27,6 +27,7 @@ export const CHANNELS = {
   previewChat: 'brand:preview-chat',
   listPresets: 'brand:list-presets',
   loadPreset: 'brand:load-preset',
+  getDashboard: 'dashboard:get',
   authState: 'auth:state',
   authLogin: 'auth:login',
   authLock: 'auth:lock',
