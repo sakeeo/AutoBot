@@ -96,6 +96,18 @@ const MIGRATIONS: string[] = [
     id TEXT PRIMARY KEY,
     created_at INTEGER NOT NULL
   );
+  `,
+  `
+  CREATE TABLE messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    wa_id TEXT UNIQUE,
+    chat_id TEXT NOT NULL,
+    direction TEXT NOT NULL,
+    text TEXT NOT NULL,
+    is_group INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX messages_chat ON messages(chat_id, id);
   `
 ]
 

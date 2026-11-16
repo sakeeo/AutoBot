@@ -11,6 +11,7 @@ import { CatalogStore } from '../src/main/catalog/catalog-store'
 import { ConversationAgent } from '../src/main/pipeline/conversation-agent'
 import { PRESETS } from '../src/shared/brand'
 import { ReplyPipeline } from '../src/main/pipeline/reply-pipeline'
+import { MessageFeed } from '../src/main/messages/message-feed'
 import type { WaGateway } from '../src/main/wa/gateway'
 import type { AiProvider } from '../src/main/answer/ai-answerer'
 import type { ConnStatus, IncomingMessage } from '../src/shared/types'
@@ -54,7 +55,7 @@ function setup(opts: { ai?: AiProvider | null } = {}) {
       gateway, store, settings, db: database,
       ai: () => opts.ai ?? null,
       clock, rand: () => rand,
-      conv, brand: () => brand, agent
+      conv, brand: () => brand, agent, feed: new MessageFeed(database, clock)
     })
   }
   let n = 0
@@ -64,6 +65,7 @@ function setup(opts: { ai?: AiProvider | null } = {}) {
   })
   const pipeline = make()
   return {
+    feed: new MessageFeed(db, clock),
     db, store, settings, gateway, clock, pipeline, make, msg, brand,
     conv: new ConversationStore(db, clock), setRand: (r: number) => (rand = r)
   }
@@ -411,3 +413,53 @@ describe('ReplyPipeline audit log', () => {
     expect(row.top_score).toBe(1)
   })
 })
+
+describe('ReplyPipeline message feed', () => {
+  const texts = (t: ReturnType<typeof setup>, chat = '6281@s.whatsapp.net') =>
+    t.feed.thread(chat).map((m) => `${m.direction}:${m.text}`)
+
+  it('records an incoming message once, even when it is processed twice', async () => {
+    const t = setup()
+    const m = t.msg()
+    await t.pipeline.handle(m)
+    await t.pipeline.handle(m)
+    expect(t.feed.thread(m.chatId).filter((x) => x.direction === 'in')).toHaveLength(1)
+  })
+  it('records the reply exactly as it was sent', async () => {
+    const t = setup()
+    await t.pipeline.handle(t.msg())
+    const out = t.feed.thread('6281@s.whatsapp.net').filter((x) => x.direction === 'out')
+    expect(out).toHaveLength(1)
+    expect(out[0].text).toBe(t.gateway.sent[0].text)
+  })
+  it('records a message the human typed from the phone as "human"', async () => {
+    const t = setup()
+    await t.pipeline.handle(t.msg({ fromMe: true, id: 'HUMAN-1', text: 'halo kak, saya admin' }))
+    expect(texts(t)).toEqual(['human:halo kak, saya admin'])
+  })
+  it('does not record the echo of the bot\'s own reply as a human message', async () => {
+    const t = setup()
+    await t.pipeline.handle(t.msg())
+    await t.pipeline.handle(t.msg({ fromMe: true, id: 'm-1', text: t.gateway.sent[0].text }))
+    expect(t.feed.thread('6281@s.whatsapp.net').filter((x) => x.direction === 'human')).toHaveLength(0)
+  })
+  it('still records messages the bot ignores (group not allowed, non-text, stale)', async () => {
+    const t = setup()
+    await t.pipeline.handle(t.msg({ isGroup: true, chatId: '1@g.us', text: 'ramai' }))
+    await t.pipeline.handle(t.msg({ text: null }))
+    await t.pipeline.handle(t.msg({ text: 'lama', timestamp: t.clock.now() - 10 * 60_000 }))
+    expect(texts(t, '1@g.us')).toEqual(['in:ramai'])
+    expect(texts(t)).toEqual(['in:(pesan non-teks)', 'in:lama'])
+  })
+  it('works without a feed (older wiring)', async () => {
+    const t = setup()
+    const bare = new ReplyPipeline({
+      gateway: t.gateway, store: t.store, settings: t.settings, db: t.db, ai: () => null, clock: t.clock,
+      rand: () => 0.5, conv: t.conv, brand: () => t.brand,
+      agent: new ConversationAgent({ store: t.store, catalog: new CatalogStore(t.db), conv: t.conv,
+        handoff: new HandoffService({ gateway: t.gateway, conv: t.conv, clock: t.clock }), gateway: t.gateway, clock: t.clock })
+    })
+    expect(await bare.handle(t.msg())).toMatchObject({ kind: 'replied' })
+  })
+})
+

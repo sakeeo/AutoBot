@@ -3,12 +3,13 @@ import type { Db } from './db'
 import type { Indexer } from './knowledge/indexer'
 import type { IndexStore } from './knowledge/index-store'
 import type { ReplyPipeline } from './pipeline/reply-pipeline'
+import type { MessageFeed } from './messages/message-feed'
 import type { SecretStore, SettingsStore } from './settings'
 import type { AiProvider } from './answer/ai-answerer'
 import type { WaGateway } from './wa/gateway'
 import type { ConnStatus, Settings } from '../shared/types'
 import { CHANNELS as C } from '../shared/channels'
-import { ApiKeySchema, LimitSchema, QuestionSchema, SettingsPatchSchema, type LogRow } from '../shared/ipc'
+import { ApiKeySchema, ChatIdSchema, LimitSchema, QuestionSchema, SettingsPatchSchema, type LogRow } from '../shared/ipc'
 import { buildDashboard } from './stats'
 import { saveApiKey } from './ai-key'
 import type { BrandHandlers } from './brand-ipc'
@@ -29,6 +30,7 @@ export interface IpcDeps {
   onSettingsChanged(prev: Settings, next: Settings): void
   brandHandlers: BrandHandlers
   auth: AuthHandlers
+  feed: MessageFeed
 }
 
 export function registerIpc(d: IpcDeps): void {
@@ -112,6 +114,8 @@ export function registerIpc(d: IpcDeps): void {
       .all(LimitSchema.parse(limit)) as LogRow[]
   )
 
+  handle(C.listChats, () => d.feed.chats())
+  handle(C.getThread, (_e, chatId: unknown) => d.feed.thread(ChatIdSchema.parse(chatId)))
   handle(C.getDashboard, () => buildDashboard(d.db, Date.now()))
 
   const a = d.auth

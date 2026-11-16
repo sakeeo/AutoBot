@@ -42,6 +42,7 @@ export interface AuthState { enabled: boolean; locked: boolean; username: string
 export type AuthResult = { ok: true } | { ok: false; error: 'bad' | 'throttled' | 'invalid' }
 
 export const ApiKeySchema = z.string().trim().min(10).max(500)
+export const ChatIdSchema = z.string().min(1).max(200)
 export const QuestionSchema = z.string().trim().min(1).max(2000)
 export const LimitSchema = z.number().int().min(1).max(500)
 
@@ -53,6 +54,16 @@ export interface DashboardData {
   recent: LogRow[]
   files: { indexed: number; failed: number }
 }
+
+export interface FeedMessage {
+  id: number
+  chatId: string
+  direction: 'in' | 'out' | 'human'
+  text: string
+  at: number
+  isGroup: boolean
+}
+export interface ChatSummary { chatId: string; isGroup: boolean; last: FeedMessage; count: number }
 
 export interface FileInfo {
   file: string
@@ -136,6 +147,9 @@ export interface Api {
   listPresets(): Promise<{ id: string; label: string }[]>
   loadPreset(id: string): Promise<{ ok: boolean; issues: Issue[]; error?: string }>
   getDashboard(): Promise<DashboardData>
+  listChats(): Promise<ChatSummary[]>
+  getThread(chatId: string): Promise<FeedMessage[]>
+  onMessage(cb: (m: FeedMessage) => void): () => void
   onAuthLocked(cb: () => void): () => void
   authState(): Promise<AuthState>
   authLogin(username: string, password: string): Promise<AuthResult>

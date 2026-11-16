@@ -18,6 +18,7 @@ import { makeProvider } from './answer/make-provider'
 import { secretNameFor } from '../shared/providers'
 import { registerIpc } from './ipc'
 import { createBrandHandlers } from './brand-ipc'
+import { MessageFeed } from './messages/message-feed'
 import { AuthStore } from './auth/auth-store'
 import { createAuthHandlers, lockAwareSend, redactWhenLocked, type AuthHandlers } from './auth/auth-ipc'
 import { createTray } from './tray'
@@ -109,6 +110,7 @@ function boot(): void {
   const handoff = new HandoffService({ gateway, conv, clock })
   const agent = new ConversationAgent({ store, catalog, conv, handoff, gateway, clock })
 
+  const feed = new MessageFeed(db, clock)
   const pipeline = new ReplyPipeline({
     gateway, store, settings, db,
     ai: currentProvider,
@@ -116,7 +118,8 @@ function boot(): void {
     rand: Math.random,
     conv,
     brand: () => brandStore.getActive(),
-    agent
+    agent,
+    feed
   })
 
   let status: ConnStatus = { state: 'disconnected' }
@@ -139,6 +142,7 @@ function boot(): void {
     send(C.evtStatus, s)
     tray?.refresh(STATUS_LABEL[s.state])
   })
+  feed.on('message', (m) => send(C.evtMessage, m))
   indexer.on('status', (e) => send(C.evtIndexStatus, e))
   pipeline.on('escalate', (m: { chatId: string; text: string | null }) => {
     send(C.evtEscalate, { chatId: m.chatId, text: m.text })
@@ -176,6 +180,7 @@ function boot(): void {
   registerIpc({
     brandHandlers,
     auth: authHandlers,
+    feed,
     gateway, getStatus: () => status, indexer, store, settings, secrets, pipeline, db, makeProvider,
     getWindow: () => win,
     onSettingsChanged: (prev, next) => {

@@ -10,6 +10,7 @@ import type { AiProvider } from '../answer/ai-answerer'
 import type { ConversationStore } from '../conversation/store'
 import { splitBubbles, typingMsFor } from '../conversation/bubbles'
 import type { ConversationAgent, AgentTurnResult } from './conversation-agent'
+import type { MessageFeed } from '../messages/message-feed'
 import type { BrandProfile } from '../../shared/brand'
 import type { Settings } from '../../shared/types'
 
@@ -34,6 +35,8 @@ export interface PipelineDeps {
   conv: ConversationStore
   brand: () => BrandProfile
   agent: ConversationAgent
+  /** Records and announces every message; optional so older wiring and tests keep working. */
+  feed?: MessageFeed
 }
 
 /** Thrown right before sending when a human took over the chat while the answer was being prepared. */
@@ -63,6 +66,7 @@ export class ReplyPipeline extends EventEmitter {
   handle(m: IncomingMessage): Promise<PipelineResult> {
     // Our own messages never wait behind a customer message: a human may type while the bot is still composing.
     if (m.fromMe) return Promise.resolve(this.handleOwn(m))
+    this.d.feed?.recordIncoming(m)
     const prev = this.chains.get(m.chatId) ?? Promise.resolve()
     const next = prev.then(() => this.run(m))
     const tail = next.catch(() => undefined)
@@ -91,6 +95,7 @@ export class ReplyPipeline extends EventEmitter {
   private takeover(m: IncomingMessage): void {
     this.d.conv.pauseFor(m.chatId, 'manusia', this.d.brand().limits.pauseHours)
     this.d.conv.appendTurn(m.chatId, 'admin', m.text ?? '(pesan non-teks)')
+    this.d.feed?.recordHuman(m)
   }
 
   private async run(m: IncomingMessage): Promise<PipelineResult> {
@@ -229,6 +234,7 @@ export class ReplyPipeline extends EventEmitter {
     try {
       sentId = await this.d.gateway.sendText(chatId, text, { typingMs })
       if (sentId) this.d.conv.rememberSentId(sentId)
+      this.d.feed?.recordOutgoing(chatId, text, sentId)
     } finally {
       this.inflight.delete(chatId)
     }

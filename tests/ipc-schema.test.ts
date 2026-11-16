@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { CHANNELS, SettingsPatchSchema, ApiKeySchema, AuthSetupSchema } from '../src/shared/ipc'
+import { CHANNELS, SettingsPatchSchema, ApiKeySchema, AuthSetupSchema, ChatIdSchema } from '../src/shared/ipc'
 
 describe('SettingsPatchSchema', () => {
   it('accepts a valid partial patch', () => {
@@ -75,3 +75,13 @@ describe('AuthSetupSchema', () => {
     expect(AuthSetupSchema.safeParse({ username: 'a', password: '12345678', admin: true }).success).toBe(false)
   })
 })
+
+describe('ChatIdSchema', () => {
+  it('rejects an empty or oversized chat id', () => {
+    expect(ChatIdSchema.safeParse('6281@s.whatsapp.net').success).toBe(true)
+    expect(ChatIdSchema.safeParse('').success).toBe(false)
+    expect(ChatIdSchema.safeParse('x'.repeat(201)).success).toBe(false)
+    expect(ChatIdSchema.safeParse(42).success).toBe(false)
+  })
+})
+
