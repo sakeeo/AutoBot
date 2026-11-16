@@ -67,7 +67,7 @@ function parseResponse(raw: string): z.infer<typeof ResponseSchema> | null {
   }
 }
 
-function toAiError(e: unknown): AiError {
+export function toAiError(e: unknown): AiError {
   if (e instanceof AiError) return e
   const status = (e as { status?: number }).status
   if (status === 401 || status === 403) return new AiError('AUTH')

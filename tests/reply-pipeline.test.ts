@@ -183,6 +183,30 @@ describe('ReplyPipeline ai mode', () => {
   })
 })
 
+describe('ReplyPipeline.preview', () => {
+  it('shows decision and answer without sending anything', async () => {
+    const t = setup()
+    const p = await t.pipeline.preview('berapa harga kopi?')
+    expect(p.decision.kind).toBe('answerable')
+    expect(p.answer?.text).toContain('Rp25.000')
+    expect(p.via).toBe('extractive')
+    expect(t.gateway.sent).toHaveLength(0)
+  })
+  it('reports out of context with no answer', async () => {
+    const t = setup()
+    const p = await t.pipeline.preview('siapa presiden indonesia?')
+    expect(p.decision.kind).toBe('out_of_context')
+    expect(p.answer).toBeNull()
+    expect(p.via).toBeNull()
+  })
+  it('does not write to the audit log or cooldowns', async () => {
+    const t = setup()
+    await t.pipeline.preview('berapa harga kopi?')
+    expect((t.db.prepare('SELECT COUNT(*) c FROM message_log').get() as any).c).toBe(0)
+    expect((t.db.prepare('SELECT COUNT(*) c FROM cooldowns').get() as any).c).toBe(0)
+  })
+})
+
 describe('ReplyPipeline audit log', () => {
   it('records the decision with the question and sources', async () => {
     const t = setup()

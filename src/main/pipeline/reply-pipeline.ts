@@ -3,7 +3,7 @@ import type { Db } from '../db'
 import type { IndexStore } from '../knowledge/index-store'
 import type { SettingsStore } from '../settings'
 import type { WaGateway } from '../wa/gateway'
-import type { Answer, Hit, IncomingMessage } from '../../shared/types'
+import type { Answer, Decision, Hit, IncomingMessage } from '../../shared/types'
 import { decide } from '../answer/gate'
 import { buildExtractiveAnswer } from '../answer/extractive'
 import { AiError, askAi, type AiProvider } from '../answer/ai-answerer'
@@ -114,6 +114,15 @@ export class ReplyPipeline extends EventEmitter {
       top,
       sources: answered.answer.sources
     }
+  }
+
+  /** Dry run for the "Uji Jawaban" panel: same retrieval, gate and answerer, but nothing is sent or logged. */
+  async preview(text: string): Promise<{ decision: Decision; answer: Answer | null; via: 'extractive' | 'ai' | null }> {
+    const s = this.d.settings.get()
+    const decision = decide(text, this.d.store.search(text, TOP_K), s.threshold)
+    if (decision.kind === 'out_of_context') return { decision, answer: null, via: null }
+    const answered = await this.answer(text, decision.hits, s.mode, s.ai)
+    return { decision, answer: answered?.answer ?? null, via: answered?.via ?? null }
   }
 
   private async answer(

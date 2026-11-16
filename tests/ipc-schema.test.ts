@@ -1,0 +1,44 @@
+import { describe, it, expect } from 'vitest'
+import { CHANNELS, SettingsPatchSchema, ApiKeySchema } from '../src/shared/ipc'
+
+describe('SettingsPatchSchema', () => {
+  it('accepts a valid partial patch', () => {
+    expect(SettingsPatchSchema.safeParse({ threshold: 0.7 }).success).toBe(true)
+    expect(SettingsPatchSchema.safeParse({ theme: 'dark', allowGroups: true }).success).toBe(true)
+    expect(
+      SettingsPatchSchema.safeParse({ outOfContext: { action: 'escalate', replyText: 'hai' } }).success
+    ).toBe(true)
+  })
+  it('rejects out-of-range or malformed values', () => {
+    expect(SettingsPatchSchema.safeParse({ threshold: 2 }).success).toBe(false)
+    expect(SettingsPatchSchema.safeParse({ threshold: -0.1 }).success).toBe(false)
+    expect(SettingsPatchSchema.safeParse({ mode: 'x' }).success).toBe(false)
+    expect(SettingsPatchSchema.safeParse({ cooldownSec: -1 }).success).toBe(false)
+    expect(SettingsPatchSchema.safeParse({ knowledgeFolders: [1] }).success).toBe(false)
+  })
+  it('rejects unknown properties', () => {
+    expect(SettingsPatchSchema.safeParse({ threshold: 0.5, evil: true }).success).toBe(false)
+  })
+})
+
+describe('ApiKeySchema', () => {
+  it('rejects empty and absurdly long keys', () => {
+    expect(ApiKeySchema.safeParse('').success).toBe(false)
+    expect(ApiKeySchema.safeParse('x'.repeat(1000)).success).toBe(false)
+    expect(ApiKeySchema.safeParse('sk-ant-' + 'a'.repeat(30)).success).toBe(true)
+  })
+})
+
+describe('CHANNELS', () => {
+  it('has no channel that returns the api key or session credentials', () => {
+    const names = Object.keys(CHANNELS).join(' ').toLowerCase()
+    expect(names).not.toContain('getapikey')
+    expect(names).not.toContain('creds')
+    expect(names).not.toContain('session')
+  })
+  it('exposes the expected channels', () => {
+    for (const c of ['getStatus', 'connect', 'logout', 'getSettings', 'updateSettings', 'pickFolder',
+      'listFiles', 'reindex', 'testQuestion', 'saveApiKey', 'hasApiKey', 'deleteApiKey', 'openConsole', 'getLog'])
+      expect(CHANNELS).toHaveProperty(c)
+  })
+})
