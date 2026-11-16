@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   BATCH_SIZE, HOURLY_MAX, TIER_LIMITS, activeDayIndex, batchPauseMs, dailyCap, effectiveTier, inSendWindow,
-  nextDelayMs, nextWindowStart, warmupCap
+  nextDayWindowStart, nextDelayMs, nextWindowStart, warmupCap
 } from '../../src/main/broadcast/limits'
 
 const DAY = 86_400_000
@@ -75,4 +75,10 @@ describe('send window', () => {
     expect(nextWindowStart(at(12), W)).toBe(at(12))
     expect(nextWindowStart(at(20, 30), W)).toBe(at(9, 0, 17))
   })
+  it('nextDayWindowStart is always the opening of the following day', () => {
+    expect(nextDayWindowStart(at(7), W)).toBe(at(9, 0, 17))
+    expect(nextDayWindowStart(at(12), W)).toBe(at(9, 0, 17))
+    expect(nextDayWindowStart(at(22), W)).toBe(at(9, 0, 17))
+  })
 })
+

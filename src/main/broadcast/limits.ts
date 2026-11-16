@@ -82,3 +82,10 @@ export function nextWindowStart(now: number, w: Window): number {
   const s = minutesOf(w.start)
   return Date.UTC(z.y, z.mo - 1, z.d + dayShift, Math.floor(s / 60), s % 60) - z.offset
 }
+
+/** Opening of the send window on the day after `now` (in the window's zone). */
+export function nextDayWindowStart(now: number, w: Window): number {
+  const z = zoned(now, w.timezone)
+  const s = minutesOf(w.start)
+  return Date.UTC(z.y, z.mo - 1, z.d + 1, Math.floor(s / 60), s % 60) - z.offset
+}
