@@ -29,7 +29,8 @@ const MIGRATIONS: string[] = [
     chat_id TEXT PRIMARY KEY,
     last_at INTEGER NOT NULL
   );
-  `
+  `,
+  `ALTER TABLE message_log ADD COLUMN text TEXT;`
 ]
 
 export function openDb(path: string): Db {
