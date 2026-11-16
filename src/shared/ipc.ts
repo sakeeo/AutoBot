@@ -68,7 +68,7 @@ export interface AgentTurnView {
   handoff: { reason: string } | null
   sources: string[]
   matchedRule: string | null
-  removed: { numbers: boolean; urls: string[]; numbersUnknown: string[] }
+  removed: { numbers: boolean; urls: string[]; numbersUnknown: string[]; cta?: boolean }
   fallback: boolean
   hits: { file: string; text: string; coverage: number }[]
 }

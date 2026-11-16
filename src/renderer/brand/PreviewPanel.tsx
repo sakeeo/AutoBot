@@ -56,6 +56,7 @@ export function PreviewPanel({ beforeSend }: { beforeSend: () => Promise<void> }
             <div className="d-flex flex-wrap gap-1 mt-1">
               {t.handoff && <span className="badge text-bg-warning">diserahkan ke admin ({t.handoff.reason})</span>}
               {t.removed.numbers && <span className="badge text-bg-info">nomor disaring</span>}
+              {t.removed.cta && <span className="badge text-bg-info">ajakan hubungi disaring</span>}
               {t.removed.urls.length > 0 && <span className="badge text-bg-info">{t.removed.urls.length} tautan disaring</span>}
               {t.removed.numbersUnknown.length > 0 && <span className="badge text-bg-info">harga tak dikenal diganti</span>}
               {t.fallback && <span className="badge text-bg-danger">AI gagal</span>}

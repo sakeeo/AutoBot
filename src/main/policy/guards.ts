@@ -99,6 +99,24 @@ export function unknownNumbers(reply: string, context: string): string[] {
   return [...new Set(strictMoney(reply).filter((v) => !known.has(v)))].map(String)
 }
 
+/** Sentences that send a customer who is already chatting with us to contact us somewhere else. */
+const REFERRAL_PATTERNS = [
+  /\b(hubungi|kontak|chat|dm|tanya\w*|konsultasi\w*|diskusi\w*|pesan|order|minta)\b[^.\n]{0,40}\b(lewat|via|melalui)\s+(whatsapp|wa)\b/i,
+  /\bhubungi (kami|admin|tim)\b/i,
+  /\bnomor (whatsapp|wa)\s+kami\b/i,
+  /\bklik (tombol|tautan|link)\b/i,
+  /\bisi (formulir|form)\b/i,
+  /\bwa\.me\b/i
+]
+
+/** Drops model sentences telling the customer to contact us on WhatsApp / click buttons / fill forms. */
+export function removeCtaSentences(text: string): { text: string; removed: boolean } {
+  const parts = sentences(text)
+  const kept = parts.filter((s) => !REFERRAL_PATTERNS.some((p) => p.test(s)))
+  if (kept.length === parts.length) return { text, removed: false }
+  return { text: kept.join(' '), removed: true }
+}
+
 const CTA_PATTERNS = [
   /hubungi (kami )?(lewat|via|melalui) whatsapp/i,
   /klik (tombol|tautan|link)/i,

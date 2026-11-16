@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
-  containsNumber, removeSelfNumber, extractUrls, stripDisallowedUrls, unknownNumbers, sanitizeChunk
+  containsNumber, removeSelfNumber, extractUrls, stripDisallowedUrls, unknownNumbers, sanitizeChunk,
+  removeCtaSentences
 } from '../src/main/policy/guards'
 
 const BOT = '6285119308345'
@@ -64,6 +65,31 @@ describe('unknownNumbers', () => {
   })
   it('ignores small numbers, years and hours', () => {
     expect(unknownNumbers('Tersedia 3 paket, buka jam 09.00 sampai 17.00 tahun 2026', 'Harga Rp1.500.000')).toEqual([])
+  })
+})
+
+describe('removeCtaSentences', () => {
+  it('drops sentences that send the customer to contact us elsewhere', () => {
+    for (const s of [
+      'Silakan hubungi kami lewat WhatsApp ya.',
+      'Konsultasi gratis via WhatsApp.',
+      'Chat kami melalui WhatsApp untuk estimasi.',
+      'Klik tombol Pesan untuk memesan.',
+      'Isi formulir di halaman ini.',
+      'Simpan nomor WhatsApp kami.'
+    ]) {
+      const r = removeCtaSentences(`Harga Rp1,5 juta. ${s} Terima kasih.`)
+      expect(r.removed, s).toBe(true)
+      expect(r.text, s).toBe('Harga Rp1,5 juta. Terima kasih.')
+    }
+  })
+  it('keeps normal sentences, including ones that mention WhatsApp as a feature or say the team will contact them', () => {
+    for (const s of [
+      'Kami menyediakan integrasi WhatsApp dan email.',
+      'Admin kami akan menghubungi Kakak ya.',
+      'Tim akan menghubungi lewat WhatsApp ini.',
+      'Harga Rp1,5 juta per tahun.'
+    ]) expect(removeCtaSentences(s), s).toEqual({ text: s, removed: false })
   })
 })
 

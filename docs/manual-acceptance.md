@@ -37,3 +37,27 @@ npm run dist          # menjalankan electron-vite build lalu electron-builder (O
 
 - Windows: installer NSIS di `dist/`. Linux: AppImage dan `.deb` di `dist/`.
 - Ganti `maintainer` di `electron-builder.yml` dan ikon placeholder di `build/icon.png` dan `resources/tray.png`.
+
+## Tambahan: Brand & Konversi (agen percakapan)
+
+Prasyarat: nomor sekunder untuk bot, **nomor lain untuk admin** (bukan nomor bot), API key AI tersimpan dan "Gunakan AI" aktif,
+folder pengetahuan `knowledge/kerabat-koding` terindeks (file `katalog.csv` ikut terindeks sebagai katalog produk).
+
+| # | Langkah | Hasil yang diharapkan | Lulus |
+|---|---|---|---|
+| B1 | Menu **Brand & Konversi** → pilih preset (Toko Online atau Jasa/Agensi). | Muncul konfirmasi; aturan awal terisi, identitas yang sudah diketik tetap | ☐ |
+| B2 | Isi nama bisnis, nama bot, nada. Tambah satu admin dengan nomor **berbeda** dari bot. | Tidak ada galat merah; tombol Terapkan aktif | ☐ |
+| B3 | Isi nomor admin yang **sama** dengan nomor bot. | Peringatan merah "sama dengan nomor bot" dan Terapkan nonaktif | ☐ |
+| B4 | Tujuan Checkout tanpa tautan checkout dan tanpa produk ber-checkout_url. | Galat "Tujuan Checkout butuh…" | ☐ |
+| B5 | Di pratinjau, tulis "berapa harga website umkm?" lalu "oke saya mau". | Balasan natural; tindakan tampil (Kirim checkout atau Serah ke admin) sesuai aturan | ☐ |
+| B6 | Di pratinjau, tulis "siapa presiden Indonesia?". | Tidak dijawab dari pengetahuan umum; balasan natural "kurang tahu" | ☐ |
+| B7 | Terapkan. Dari nomor pelanggan, kirim "halo", lalu tanya harga. | Balasan beberapa gelembung pendek dengan indikator mengetik; **tidak pernah** menyebut nomor bot atau "hubungi kami lewat WhatsApp" | ☐ |
+| B8 | Mode Produk: ucapkan siap membeli. | Tautan checkout dari daftar terkirim sekali dengan `utm_source=wa_bot`; tidak dikirim ulang dalam 24 jam | ☐ |
+| B9 | Mode Jasa: sebut kebutuhan dan nama, lalu minta lanjut. | Pesan pamit ke pelanggan; **admin menerima ringkasan lead di WhatsApp**; bot berhenti membalas chat itu | ☐ |
+| B10 | Kirim "barang saya rusak / mau refund". | Selalu diserahkan ke admin, apa pun aturannya | ☐ |
+| B11 | **Ketik balasan dari HP bot** ke chat pelanggan (bukan lewat aplikasi). | Bot berhenti membalas chat itu (jeda 6 jam). *Ini perilaku Baileys yang belum bisa diuji otomatis: catat jika pesan dari HP tidak terdeteksi.* | ☐ |
+| B12 | Setelah B11, tunggu jeda habis (atau ubah "jeda" di tab Jam & Batas menjadi 0,1 jam). | Bot kembali menjawab | ☐ |
+| B13 | Matikan internet atau pakai API key salah, lalu kirim pertanyaan. | Mode Jasa: serah ke admin (ai_gagal); Mode Produk: balasan "kurang tahu"; pelanggan tidak melihat galat atau JSON | ☐ |
+| B14 | Kirim 3 pesan pendek berturut-turut dengan cepat. | Dijawab satu per satu, berurutan, tanpa balasan ganda | ☐ |
+| B15 | Ekspor profil, ubah sesuatu, Terapkan, lalu Pulihkan versi lama. | Perilaku kembali seperti versi lama | ☐ |
+| B16 | Ganti tema gelap/terang di halaman Brand & Konversi. | Semua komponen tetap terbaca | ☐ |

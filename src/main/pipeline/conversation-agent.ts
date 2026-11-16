@@ -11,7 +11,7 @@ import type { WaGateway } from '../wa/gateway'
 import { AiError, type AiProvider } from '../answer/ai-answerer'
 import { runAgent, type AgentContext } from '../answer/agent'
 import { evaluateRules, LOW_CONFIDENCE, type ChosenAction, type RuleFacts } from '../policy/rules'
-import { removeSelfNumber, sanitizeChunk, stripDisallowedUrls, unknownNumbers } from '../policy/guards'
+import { removeCtaSentences, removeSelfNumber, sanitizeChunk, stripDisallowedUrls, unknownNumbers } from '../policy/guards'
 
 export interface AgentTurnInput {
   chatId: string
@@ -32,7 +32,7 @@ export interface AgentTurnResult {
   handoff: { reason: string } | null
   sources: string[]
   matchedRule: string | null
-  removed: { numbers: boolean; urls: string[]; numbersUnknown: string[] }
+  removed: { numbers: boolean; urls: string[]; numbersUnknown: string[]; cta: boolean }
   fallback: boolean
   hits: Hit[]
 }
@@ -121,6 +121,7 @@ export class ConversationAgent {
 
     // 1. Clean what the model wrote.
     let removedNumbers = false
+    let removedCta = false
     const removedUrls: string[] = []
     let parts: string[] = []
     for (let p of out.reply_parts) {
@@ -129,6 +130,9 @@ export class ConversationAgent {
         if (r.removed) removedNumbers = true
         p = r.text
       }
+      const c = removeCtaSentences(p)
+      if (c.removed) removedCta = true
+      p = c.text
       const u = stripDisallowedUrls(p, allowlist)
       removedUrls.push(...u.removed)
       if (u.text.trim()) parts.push(u.text.trim())
@@ -276,7 +280,7 @@ export class ConversationAgent {
       handoff: handoffReason ? { reason: handoffReason } : null,
       sources: out.sources,
       matchedRule: action.ruleId,
-      removed: { numbers: removedNumbers, urls: removedUrls, numbersUnknown },
+      removed: { numbers: removedNumbers, urls: removedUrls, numbersUnknown, cta: removedCta },
       fallback: false,
       hits
     }
@@ -309,7 +313,7 @@ export class ConversationAgent {
     if (!dryRun) conv.appendTurn(chatId, 'bot', replyParts.join('\n'))
     return {
       intent: 'di_luar_konteks', action, replyParts, linkSent: null, handoff, sources: [], matchedRule: null,
-      removed: { numbers: false, urls: [], numbersUnknown: [] }, fallback: true, hits
+      removed: { numbers: false, urls: [], numbersUnknown: [], cta: false }, fallback: true, hits
     }
   }
 
