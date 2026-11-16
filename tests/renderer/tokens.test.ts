@@ -31,14 +31,14 @@ const contrast = (a: string, b: string): number => {
 describe('design tokens (design-guide §11)', () => {
   it('uses the guide values exactly', () => {
     const expected: Record<string, string> = {
-      '--color-primary': '#2449A8', '--color-primary-dark': '#1D3F98', '--color-primary-light': '#EAF0FC',
-      '--color-background': '#F3F5F9', '--color-surface': '#FFFFFF', '--color-border': '#E7EBF1',
-      '--color-text-primary': '#263247', '--color-text-secondary': '#7B8798',
-      '--color-success': '#9BCB42', '--color-warning': '#E9B34A', '--color-danger': '#D97979',
+      '--color-primary': '#1F4D38', '--color-primary-dark': '#163A29', '--color-primary-light': '#E1E5CF',
+      '--color-background': '#EDE6D6', '--color-surface': '#F7F3EA', '--color-border': '#D9CFB8',
+      '--color-text-primary': '#1C2A22', '--color-text-secondary': '#8A8570',
+      '--color-success': '#7FA33A', '--color-warning': '#D9A22E', '--color-danger': '#F24A2B',
       '--radius-control': '6px', '--radius-card': '10px',
       '--space-1': '4px', '--space-2': '8px', '--space-3': '12px', '--space-4': '16px',
       '--space-5': '20px', '--space-6': '24px', '--space-8': '32px',
-      '--shadow-card': '0 2px 8px rgba(20, 35, 60, 0.05)'
+      '--shadow-card': '0 2px 8px rgba(60, 50, 20, 0.08)'
     }
     for (const [k, v] of Object.entries(expected)) expect(light[k]?.toUpperCase(), k).toBe(v.toUpperCase())
   })

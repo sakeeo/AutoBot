@@ -4,15 +4,19 @@
 
 Panduan ini mendokumentasikan bahasa visual dashboard **Rubick**
 berdasarkan referensi desain yang diberikan. Antarmuka menggunakan pola
-**admin dashboard** dengan sidebar navigasi berwarna biru, area kerja
-berwarna abu-abu sangat muda, dan konten yang disusun dalam kartu-kartu
-putih.
+**admin dashboard** dengan sidebar navigasi berwarna hijau tua, area kerja
+berwarna krem, dan konten yang disusun dalam kartu-kartu krem muda.
+
+> **Pembaruan palet (60/30/10).** Palet awal berbasis biru telah diganti:
+> krem sebagai warna utama (60%), hijau tua sebagai warna kedua (30%), dan
+> jingga-merah menyala sebagai aksen (10%). Tabel dan token di bawah sudah
+> memakai nilai baru; tema gelap mengikuti palet yang sama.
 
 **Karakter desain** - Profesional, informatif, dan berorientasi pada
 data. - Padat fitur, tetapi tetap dipisahkan ke dalam modul yang
 jelas. - Mengutamakan keterbacaan, pemindaian cepat, dan akses ke
-navigasi utama. - Menggunakan warna biru sebagai identitas visual dan
-warna netral sebagai latar konten.
+navigasi utama. - Menggunakan hijau tua sebagai identitas visual dan
+krem sebagai latar konten.
 
 > Catatan: nilai warna, ukuran, dan tipografi di bawah merupakan
 > estimasi visual dari screenshot, bukan token desain asli.
@@ -39,39 +43,40 @@ warna netral sebagai latar konten.
   -----------------------------------------------------------------------
   Token                   Estimasi warna          Penggunaan
   ----------------------- ----------------------- -----------------------
-  Primary                 `#2449A8`               Sidebar, tombol utama,
+  Primary                 `#1F4D38`               Sidebar, tombol utama,
                                                   elemen aktif
 
-  Primary Dark            `#1D3F98`               Area sidebar dan aksen
-                                                  biru yang lebih pekat
+  Primary Dark            `#163A29`               Area sidebar dan aksen
+                                                  hijau yang lebih pekat
 
-  Primary Light           `#EAF0FC`               Highlight lembut,
+  Primary Light           `#E1E5CF`               Highlight lembut,
                                                   selected state
 
-  Page Background         `#F3F5F9`               Latar utama halaman
+  Page Background         `#EDE6D6`               Latar utama halaman (krem, 60%)
 
-  Surface                 `#FFFFFF`               Kartu, panel, tabel
+  Surface                 `#F7F3EA`               Kartu, panel, tabel
 
-  Text Primary            `#263247`               Judul dan teks utama
+  Text Primary            `#1C2A22`               Judul dan teks utama
 
-  Text Secondary          `#7B8798`               Label, metadata,
+  Text Secondary          `#8A8570`               Label, metadata,
                                                   deskripsi
 
-  Border                  `#E7EBF1`               Garis pemisah dan batas
+  Border                  `#D9CFB8`               Garis pemisah dan batas
                                                   komponen
 
-  Success                 `#9BCB42`               Status aktif, kenaikan,
+  Success                 `#7FA33A`               Status aktif, kenaikan,
                                                   indikator positif
 
-  Warning                 `#E9B34A`               Peringatan dan kategori
+  Warning                 `#D9A22E`               Peringatan dan kategori
                                                   usia
 
-  Danger                  `#D97979`               Status tidak aktif,
-                                                  pembatalan, aksi hapus
+  Danger / Loud           `#F24A2B`               Aksen menyala (10%), status
+                                                  tidak aktif, aksi hapus
   -----------------------------------------------------------------------
 
-**Aturan penggunaan warna** - Biru adalah warna dominan untuk navigasi
-dan aksi utama. - Gunakan latar putih untuk memisahkan modul dari latar
+**Aturan penggunaan warna** - Hijau tua adalah warna kedua untuk navigasi
+dan aksi utama; jingga-merah hanya untuk hal yang harus menarik mata
+(kira-kira 10% layar). - Gunakan latar krem muda untuk memisahkan modul dari latar
 halaman. - Warna status hanya digunakan sebagai indikator, bukan
 dekorasi. - Pastikan teks di atas warna berkontras cukup untuk dibaca.
 
@@ -142,7 +147,7 @@ proporsional pada desktop dan mode drawer pada layar kecil.
 
 ### Sidebar
 
-Karakteristik: - Latar biru solid. - Logo dan nama produk berada di
+Karakteristik: - Latar hijau tua solid. - Logo dan nama produk berada di
 bagian atas. - Item navigasi menggunakan ikon outline dan label. - Item
 aktif memiliki latar atau highlight yang lebih terang. - Menu yang
 memiliki submenu menampilkan chevron. - Jarak vertikal antaritem cukup
@@ -172,7 +177,7 @@ berikut.
 ### 6.1 Announcement Banner
 
 -   Banner horizontal di bagian atas konten.
--   Warna biru sebagai penekanan.
+-   Warna hijau tua sebagai penekanan.
 -   Teks pengumuman singkat.
 -   Tombol dismiss di sisi kanan.
 
@@ -269,7 +274,7 @@ melalui struktur konten.
 
 ### Buttons
 
--   Primary: biru solid dengan teks putih.
+-   Primary: hijau tua solid dengan teks putih.
 -   Secondary: putih atau transparan dengan border netral.
 -   Destructive: merah untuk aksi yang menghapus atau membatalkan.
 -   Gunakan label aksi yang spesifik, misalnya `Download Report`, bukan
@@ -319,8 +324,8 @@ melalui struktur konten.
   Card            Radius 8--12 px
   Large banner    Radius 8--12 px
   Input           Border 1 px
-  Card border     `#E7EBF1`
-  Shadow          Sangat lembut, misalnya `0 2px 8px rgba(20, 35, 60, 0.05)`
+  Card border     `#D9CFB8`
+  Shadow          Sangat lembut, misalnya `0 2px 8px rgba(60, 50, 20, 0.08)`
 
 Gunakan border sebagai pemisah utama. Shadow hanya untuk memberi sedikit
 kedalaman.
@@ -352,20 +357,20 @@ berikutnya. - Konfirmasi sebelum aksi destruktif seperti Delete.
 
 ``` css
 :root {
-  --color-primary: #2449A8;
-  --color-primary-dark: #1D3F98;
-  --color-primary-light: #EAF0FC;
+  --color-primary: #1F4D38;
+  --color-primary-dark: #163A29;
+  --color-primary-light: #E1E5CF;
 
-  --color-background: #F3F5F9;
-  --color-surface: #FFFFFF;
-  --color-border: #E7EBF1;
+  --color-background: #EDE6D6;
+  --color-surface: #F7F3EA;
+  --color-border: #D9CFB8;
 
-  --color-text-primary: #263247;
-  --color-text-secondary: #7B8798;
+  --color-text-primary: #1C2A22;
+  --color-text-secondary: #8A8570;
 
-  --color-success: #9BCB42;
-  --color-warning: #E9B34A;
-  --color-danger: #D97979;
+  --color-success: #7FA33A;
+  --color-warning: #D9A22E;
+  --color-danger: #F24A2B;
 
   --radius-control: 6px;
   --radius-card: 10px;

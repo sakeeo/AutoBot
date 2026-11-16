@@ -18,11 +18,12 @@ const CHECKS = [
 
 type Preview = { eligible: number; skipped: Record<string, number>; estimatedDays: number }
 
-export function CampaignWizard({ onDone, onClose }: { onDone(): void; onClose(): void }) {
-  const [step, setStep] = useState(1)
-  const [audience, setAudience] = useState<Audience>('chat')
-  const [name, setName] = useState('')
-  const [template, setTemplate] = useState('')
+export function CampaignWizard({ onDone, onClose, draft }: { onDone(): void; onClose(): void; draft?: Campaign }) {
+  // Editing a draft opens at the message step with its saved values; the draft is only replaced once the new version is valid.
+  const [step, setStep] = useState(draft ? 2 : 1)
+  const [audience, setAudience] = useState<Audience>(draft?.audience ?? 'chat')
+  const [name, setName] = useState(draft?.name ?? '')
+  const [template, setTemplate] = useState(draft?.template ?? '')
   const [errors, setErrors] = useState<string[]>([])
   const [warnings, setWarnings] = useState<string[]>([])
   const [samples, setSamples] = useState<string[]>([])
@@ -37,10 +38,11 @@ export function CampaignWizard({ onDone, onClose }: { onDone(): void; onClose():
     setBusy(true)
     setErrors([])
     try {
-      // Going back and continuing again must not leave the first draft behind.
-      if (campaign) { await window.api.bcDiscardDraft(campaign.id).catch(() => undefined); setCampaign(null) }
       const r = await window.api.bcCreateCampaign({ name: name.trim(), template, audience })
       if (!r.ok) { setErrors(r.errors); setWarnings(r.warnings); return }
+      // Going back and continuing again must not leave the previous draft behind (a failed check above keeps it).
+      const previous = campaign ?? draft
+      if (previous) await window.api.bcDiscardDraft(previous.id).catch(() => undefined)
       setCampaign(r.campaign)
       setWarnings(r.warnings)
       setSamples(r.samples)
@@ -69,13 +71,14 @@ export function CampaignWizard({ onDone, onClose }: { onDone(): void; onClose():
   }
 
   async function cancel(): Promise<void> {
-    if (campaign) await window.api.bcDiscardDraft(campaign.id).catch(() => undefined)
+    // A draft being edited stays saved when the editor is closed; a brand-new one is thrown away.
+    if (campaign && !draft) await window.api.bcDiscardDraft(campaign.id).catch(() => undefined)
     onClose()
   }
 
   const big = (preview?.eligible ?? 0) > BIG
   return (
-    <Card title={`Kampanye baru · langkah ${step} dari 4`} className="mb-3"
+    <Card title={`${draft ? 'Ubah draf' : 'Kampanye baru'} · langkah ${step} dari 4`} className="mb-3"
       actions={<button type="button" className="btn btn-sm btn-outline-secondary" onClick={cancel}>Batal</button>}>
       {step === 1 && (
         <>

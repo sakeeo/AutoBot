@@ -12,7 +12,7 @@ const base: Settings = {
   ai: { provider: 'claude', model: 'claude-haiku-5-5', maxTokens: 400 }, autoStart: false, theme: 'auto', notifyIncoming: true
 }
 const zero = { replied: 0, refused: 0, handoff: 0, errors: 0, links: 0 }
-const empty: DashboardData = { today: zero, week: zero, waitingAdmin: 0, recent: [], files: { indexed: 0, failed: 0 } }
+const empty: DashboardData = { today: zero, week: zero, trend: [], waitingAdmin: 0, recent: [], files: { indexed: 0, failed: 0 } }
 const withAdmin = () => {
   const p = structuredClone(PRESETS.jasa_agensi)
   p.admins = [{ id: 'a1', name: 'Budi', number: '6281234567890', notifyWhatsapp: true }]

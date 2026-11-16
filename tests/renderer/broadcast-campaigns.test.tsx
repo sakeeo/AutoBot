@@ -200,7 +200,7 @@ describe('Campaign wizard: no orphan drafts', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Lanjut' }))
     await screen.findByText('12 penerima layak')
   }
-  it('going back and continuing again discards the first draft before creating the next', async () => {
+  it('going back and continuing again replaces the first draft once the new one is created', async () => {
     const api = setApi()
     await open()
     await toReview()
@@ -209,7 +209,7 @@ describe('Campaign wizard: no orphan drafts', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Lanjut' }))
     await waitFor(() => expect(api.bcCreateCampaign).toHaveBeenCalledTimes(2))
     expect(api.bcDiscardDraft).toHaveBeenCalledWith(7)
-    expect(api.bcDiscardDraft.mock.invocationCallOrder[0]).toBeLessThan(api.bcCreateCampaign.mock.invocationCallOrder[1])
+    expect(api.bcDiscardDraft.mock.invocationCallOrder[0]).toBeGreaterThan(api.bcCreateCampaign.mock.invocationCallOrder[1])
   })
   it('cancelling the wizard discards the draft it made', async () => {
     const api = setApi()
@@ -217,6 +217,52 @@ describe('Campaign wizard: no orphan drafts', () => {
     await toReview()
     fireEvent.click(screen.getByRole('button', { name: 'Batal' }))
     await waitFor(() => expect(api.bcDiscardDraft).toHaveBeenCalledWith(7))
+  })
+})
+
+describe('Editing a saved draft', () => {
+  const draft = camp({ id: 5, name: 'Draf lama', template: 'Halo {nama}, ini {bisnis}.', status: 'draf', audience: 'impor', startedAt: null })
+  it('opens the message step with the saved values and replaces the draft when continued', async () => {
+    const api = setApi({ bcCampaigns: vi.fn().mockResolvedValue([draft]) })
+    render(<BroadcastPage />)
+    await screen.findByText('Draf lama')
+    fireEvent.click(screen.getByRole('button', { name: 'Ubah' }))
+    expect((screen.getByLabelText('Nama kampanye') as HTMLInputElement).value).toBe('Draf lama')
+    expect((screen.getByLabelText('Isi pesan') as HTMLTextAreaElement).value).toBe('Halo {nama}, ini {bisnis}.')
+    fireEvent.change(screen.getByLabelText('Nama kampanye'), { target: { value: 'Draf baru' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lanjut' }))
+    await screen.findByText('12 penerima layak')
+    expect(api.bcCreateCampaign).toHaveBeenCalledWith({ name: 'Draf baru', template: 'Halo {nama}, ini {bisnis}.', audience: 'impor' })
+    expect(api.bcDiscardDraft).toHaveBeenCalledWith(5)
+  })
+  it('keeps the draft when the editor is closed with Batal', async () => {
+    const api = setApi({ bcCampaigns: vi.fn().mockResolvedValue([draft]) })
+    render(<BroadcastPage />)
+    await screen.findByText('Draf lama')
+    fireEvent.click(screen.getByRole('button', { name: 'Ubah' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Batal' }))
+    await waitFor(() => expect(screen.queryByLabelText('Nama kampanye')).toBeNull())
+    expect(api.bcDiscardDraft).not.toHaveBeenCalled()
+  })
+  it('keeps the old draft when the new text fails the checks', async () => {
+    const api = setApi({
+      bcCampaigns: vi.fn().mockResolvedValue([draft]),
+      bcCreateCampaign: vi.fn().mockResolvedValue({ ok: false, errors: ['Sebut nama bisnis.'], warnings: [] })
+    })
+    render(<BroadcastPage />)
+    await screen.findByText('Draf lama')
+    fireEvent.click(screen.getByRole('button', { name: 'Ubah' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Lanjut' }))
+    await screen.findByText('Sebut nama bisnis.')
+    expect(api.bcDiscardDraft).not.toHaveBeenCalled()
+  })
+  it('deletes a draft after confirmation', async () => {
+    const api = setApi({ bcCampaigns: vi.fn().mockResolvedValue([draft]) })
+    render(<BroadcastPage />)
+    await screen.findByText('Draf lama')
+    fireEvent.click(screen.getByRole('button', { name: 'Hapus draf Draf lama' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Ya, Hapus draf Draf lama' }))
+    await waitFor(() => expect(api.bcDiscardDraft).toHaveBeenCalledWith(5))
   })
 })
 

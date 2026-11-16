@@ -39,6 +39,8 @@ export interface AgentTurnResult {
 
 const HISTORY_TURNS = 10
 const DAY_MS = 24 * 3_600_000
+/** Below this share of the message's words found in the best document, the conversation is searched too. */
+const WEAK_COVERAGE = 0.5
 const FACTUAL: Intent[] = ['tanya_harga', 'tanya_produk', 'siap_beli', 'keberatan']
 
 const rupiah = (n: number): string => 'Rp' + n.toLocaleString('id-ID')
@@ -85,8 +87,7 @@ export class ConversationAgent {
     const state = conv.getState(chatId)
     const history = conv.recentTurns(chatId, HISTORY_TURNS)
 
-    const hits = this.d.store
-      .search(text, 5)
+    const hits = this.retrieve(text, history)
       .map((h) => ({ ...h, text: sanitizeChunk(h.text, botNumber) }))
       .filter((h) => h.text.trim() !== '')
     const allProducts = catalog.list()
@@ -284,6 +285,22 @@ export class ConversationAgent {
       fallback: false,
       hits
     }
+  }
+
+  /**
+   * Documents for this message. Short answers ("Loundry") and follow-ups ("yang itu berapa?") carry little
+   * topic of their own, so when the message alone finds weak matches the previous customer message and the
+   * bot's last question join the search. The message's own hits always come first.
+   */
+  private retrieve(text: string, history: { role: string; text: string }[]): Hit[] {
+    const own = this.d.store.search(text, 5)
+    if (own.length > 0 && own[0].coverage >= WEAK_COVERAGE) return own
+    const lastOf = (role: string) => [...history].reverse().find((t) => t.role === role)?.text
+    const context = [lastOf('user'), lastOf('bot')].filter((x): x is string => !!x)
+    if (context.length === 0) return own
+    const seen = new Set(own.map((h) => h.chunkId))
+    const extra = this.d.store.search([...context, text].join(' '), 5).filter((h) => !seen.has(h.chunkId))
+    return [...own, ...extra].slice(0, 5)
   }
 
   /** The AI failed (provider error or unusable output): a service business hands off, a shop says it does not know. */

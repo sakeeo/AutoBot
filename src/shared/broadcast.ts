@@ -44,6 +44,14 @@ export const AttestSchema = z
 export const CampaignInputSchema = z
   .object({ name: z.string().trim().min(1).max(100), template: z.string().min(1).max(1000), audience: z.enum(['chat', 'impor', 'semua']) })
   .strict()
+export const AddContactSchema = z
+  .object({
+    name: z.string().trim().max(100),
+    number: z.string().trim().min(1).max(30),
+    accepted: z.literal(true),
+    sourceNote: z.string().trim().min(10).max(300)
+  })
+  .strict()
 export const ImportFileSchema = z
   .object({ name: z.string().max(200), data: z.union([z.string().max(15_000_000), z.instanceof(Uint8Array)]) })
   .strict()

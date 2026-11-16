@@ -28,7 +28,7 @@ function setApi(over: Record<string, unknown> = {}) {
       invalid: [{ row: 4, value: '123', reason: 'Nomor tidak valid.' }], sample: [{ number: '6281234567890', name: 'Budi' }]
     }),
     bcImportCommit: vi.fn().mockResolvedValue({ importId: 1, added: 2, notOnWhatsApp: 0, blockedBySuppression: 0, aborted: false }),
-    bcEraseContact: vi.fn().mockResolvedValue(undefined),
+    bcEraseContact: vi.fn().mockResolvedValue(undefined), bcAddContact: vi.fn(),
     bcCampaigns: vi.fn().mockResolvedValue([]), bcGetSafety: vi.fn().mockResolvedValue(safety),
     bcStopAll: vi.fn().mockResolvedValue(undefined), bcSetSafety: vi.fn().mockResolvedValue({ ok: true, safety }),
     onBroadcast: vi.fn().mockReturnValue(() => undefined),
@@ -165,5 +165,45 @@ describe('Import wizard', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Impor daftar' }))
     await pick('salah.csv', 'nama\nBudi')
     expect((await screen.findByRole('alert')).textContent).toMatch(/kolom nomor/i)
+  })
+})
+
+describe('Add contact by hand', () => {
+  async function openForm(over: Record<string, unknown> = {}) {
+    const api = setApi({ bcAddContact: vi.fn().mockResolvedValue({ ok: true, added: 1, notOnWhatsApp: 0, blockedBySuppression: 0 }), ...over })
+    render(<BroadcastPage />)
+    fireEvent.click(await screen.findByRole('tab', { name: /penerima/i }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Tambah kontak' }))
+    return api
+  }
+  const fill = () => {
+    fireEvent.change(screen.getByLabelText('Nama'), { target: { value: 'Rina' } })
+    fireEvent.change(screen.getByLabelText('Nomor'), { target: { value: '0812-3456-7890' } })
+  }
+  it('stays disabled until a number and the consent box are filled in', async () => {
+    await openForm()
+    const submit = screen.getAllByRole('button', { name: 'Tambah kontak' }).pop() as HTMLButtonElement
+    expect(submit.disabled).toBe(true)
+    fill()
+    expect(submit.disabled).toBe(true)
+    fireEvent.click(screen.getByLabelText(/memiliki persetujuan/i))
+    expect(submit.disabled).toBe(false)
+  })
+  it('sends name, number and the consent statement, then confirms', async () => {
+    const api = await openForm()
+    fill()
+    fireEvent.click(screen.getByLabelText(/memiliki persetujuan/i))
+    fireEvent.click(screen.getAllByRole('button', { name: 'Tambah kontak' }).pop()!)
+    await waitFor(() => expect(api.bcAddContact).toHaveBeenCalledWith({
+      name: 'Rina', number: '0812-3456-7890', accepted: true, sourceNote: 'Ditambahkan manual lewat aplikasi'
+    }))
+    expect((await screen.findByRole('status', {}, { timeout: 2000 })).textContent).toMatch(/Rina ditambahkan/)
+  })
+  it('shows why a number was refused', async () => {
+    await openForm({ bcAddContact: vi.fn().mockResolvedValue({ ok: false, error: 'Nomor ini tidak terdaftar di WhatsApp.' }) })
+    fill()
+    fireEvent.click(screen.getByLabelText(/memiliki persetujuan/i))
+    fireEvent.click(screen.getAllByRole('button', { name: 'Tambah kontak' }).pop()!)
+    expect((await screen.findByRole('alert')).textContent).toMatch(/tidak terdaftar/)
   })
 })

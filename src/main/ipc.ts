@@ -1,4 +1,4 @@
-import { dialog, ipcMain, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+import { app, dialog, ipcMain, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import type { Db } from './db'
 import type { Indexer } from './knowledge/indexer'
 import type { IndexStore } from './knowledge/index-store'
@@ -15,6 +15,11 @@ import { buildDashboard } from './stats'
 import { saveApiKey } from './ai-key'
 import type { BrandHandlers } from './brand-ipc'
 import { AUTH_CHANNELS, guardHandler, type AuthHandlers } from './auth/auth-ipc'
+import { mkdirSync } from 'node:fs'
+import { basename, join } from 'node:path'
+import { z } from 'zod'
+import { deleteKnownFile, importFiles, resolveKnownFile } from './knowledge/files'
+import { SUPPORTED_EXTENSIONS } from './knowledge/loaders'
 import { PROVIDERS, resolveBaseUrl, secretNameFor } from '../shared/providers'
 
 export interface IpcDeps {
@@ -68,6 +73,48 @@ export function registerIpc(d: IpcDeps): void {
   })
   handle(C.listFiles, () => d.store.listFiles())
   handle(C.reindex, () => d.indexer.reindexAll())
+
+  const PathSchema = z.string().min(1).max(4096)
+  handle(C.kbUpload, async (_e, folderArg: unknown) => {
+    const settings = d.settings.get()
+    const asked = typeof folderArg === 'string' ? folderArg : undefined
+    if (asked && !settings.knowledgeFolders.includes(asked)) throw new Error('FOLDER_NOT_FOUND')
+    const opts = {
+      properties: ['openFile' as const, 'multiSelections' as const],
+      filters: [{ name: 'Dokumen pengetahuan', extensions: SUPPORTED_EXTENSIONS.map((x) => x.slice(1)) }]
+    }
+    const win = d.getWindow()
+    const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+    if (r.canceled || r.filePaths.length === 0) return { canceled: true, folder: null, added: [], rejected: [] }
+    // With no folder configured yet, uploads go to a default folder inside the app's data directory.
+    let folder = asked ?? settings.knowledgeFolders[0]
+    let created = false
+    if (!folder) {
+      folder = join(app.getPath('userData'), 'knowledge')
+      mkdirSync(folder, { recursive: true })
+      created = true
+    }
+    const res = await importFiles(r.filePaths, folder)
+    if (created && res.added.length > 0) {
+      const prev = d.settings.get()
+      d.onSettingsChanged(prev, d.settings.update({ knowledgeFolders: [...prev.knowledgeFolders, folder] }))
+    }
+    return { canceled: false, folder, ...res }
+  })
+  handle(C.kbDownload, async (_e, file: unknown) => {
+    const f = resolveKnownFile(PathSchema.parse(file), d.settings.get().knowledgeFolders, d.store)
+    const win = d.getWindow()
+    const opts = { defaultPath: basename(f) }
+    const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts)
+    if (r.canceled || !r.filePath) return { ok: false, canceled: true }
+    const { copyFile } = await import('node:fs/promises')
+    await copyFile(f, r.filePath)
+    return { ok: true }
+  })
+  handle(C.kbDelete, async (_e, file: unknown) => {
+    await deleteKnownFile(PathSchema.parse(file), d.settings.get().knowledgeFolders, d.store)
+    return { ok: true }
+  })
 
   handle(C.testQuestion, (_e, q: unknown) => d.pipeline.preview(QuestionSchema.parse(q)))
 
@@ -140,6 +187,7 @@ export function registerIpc(d: IpcDeps): void {
   handle(C.bcReport, (_e, id: unknown) => bc.bcReport(id))
   handle(C.bcExportReport, (_e, id: unknown) => bc.bcExportReport(id))
   handle(C.bcEraseContact, (_e, id: unknown) => bc.bcEraseContact(id))
+  handle(C.bcAddContact, (_e, i: unknown) => bc.bcAddContact(i))
   handle(C.listChats, () => d.feed.chats())
   handle(C.getThread, (_e, chatId: unknown) => d.feed.thread(ChatIdSchema.parse(chatId)))
   handle(C.getDashboard, () => buildDashboard(d.db, Date.now()))

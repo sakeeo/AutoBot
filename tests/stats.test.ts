@@ -78,3 +78,30 @@ describe('buildDashboard', () => {
     expect(d.files).toEqual({ indexed: 2, failed: 1 })
   })
 })
+
+describe('buildDashboard trend', () => {
+  const DAY = 24 * HOUR
+  it('has seven local days ending today, oldest first, zero-filled', () => {
+    const t = buildDashboard(openDb(':memory:'), NOW).trend
+    expect(t).toHaveLength(7)
+    expect(t[6].day).toBe('2026-11-16')
+    expect(t[0].day).toBe('2026-11-10')
+    for (const d of t) expect(d).toMatchObject({ replied: 0, refused: 0, handoff: 0, errors: 0 })
+  })
+  it('buckets decisions into the day they happened, by local midnight', () => {
+    const db = openDb(':memory:')
+    log(db, 'replied:ai', startOfDay + 60_000)
+    log(db, 'replied:ai', startOfDay - 60_000)
+    log(db, 'out_of_context:reply', startOfDay - DAY + 5 * HOUR)
+    log(db, 'handoff:komplain', startOfDay - 2 * DAY + HOUR)
+    log(db, 'error:boom', startOfDay - 6 * DAY + HOUR)
+    log(db, 'ignored:cooldown', NOW - HOUR)
+    log(db, 'replied:ai', startOfDay - 7 * DAY - 60_000)
+    const t = buildDashboard(db, NOW).trend
+    expect(t[6]).toMatchObject({ day: '2026-11-16', replied: 1 })
+    expect(t[5]).toMatchObject({ day: '2026-11-15', replied: 1, refused: 1 })
+    expect(t[4]).toMatchObject({ handoff: 1 })
+    expect(t[0]).toMatchObject({ errors: 1 })
+    expect(t.reduce((n, d) => n + d.replied, 0)).toBe(2)
+  })
+})

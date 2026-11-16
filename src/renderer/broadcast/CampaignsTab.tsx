@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { CampaignStatus, CampaignView } from '../../shared/broadcast'
+import type { Campaign, CampaignStatus, CampaignView } from '../../shared/broadcast'
 import { Card } from '../ui/Card'
 import { ConfirmButton } from '../ui/ConfirmButton'
 import { DataTable } from '../ui/DataTable'
@@ -16,6 +16,7 @@ export function CampaignsTab() {
   const [campaigns, setCampaigns] = useState<CampaignView[] | null>(null)
   const [failed, setFailed] = useState(false)
   const [wizard, setWizard] = useState(false)
+  const [editing, setEditing] = useState<Campaign | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
 
   const load = useCallback(() => {
@@ -48,8 +49,12 @@ export function CampaignsTab() {
         </div>
       ))}
       {wizard && <CampaignWizard onClose={() => setWizard(false)} onDone={() => { setWizard(false); load() }} />}
+      {editing && (
+        <CampaignWizard key={editing.id} draft={editing} onClose={() => { setEditing(null); load() }}
+          onDone={() => { setEditing(null); load() }} />
+      )}
       <Card title="Kampanye"
-        actions={<button type="button" className="btn btn-primary btn-sm" onClick={() => setWizard(true)}>Buat kampanye</button>}>
+        actions={<button type="button" className="btn btn-primary btn-sm" onClick={() => { setEditing(null); setWizard(true) }}>Buat kampanye</button>}>
         {failed ? (
           <ErrorState message="Gagal memuat kampanye." onRetry={load} />
         ) : campaigns === null ? (
@@ -73,6 +78,12 @@ export function CampaignsTab() {
                 key: 'act', header: 'Aksi',
                 render: (c) => (
                   <span className="d-inline-flex gap-2">
+                    {c.status === 'draf' && (
+                      <>
+                        <button type="button" className="btn btn-sm btn-primary" onClick={() => { setWizard(false); setEditing(c) }}>Ubah</button>
+                        <ConfirmButton label="Hapus" ariaLabel={`Hapus draf ${c.name}`} onConfirm={() => run(() => window.api.bcDiscardDraft(c.id))} />
+                      </>
+                    )}
                     {c.status === 'berjalan' && <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => run(() => window.api.bcPauseCampaign(c.id))}>Jeda</button>}
                     {c.status === 'dijeda' && <button type="button" className="btn btn-sm btn-primary" onClick={() => run(() => window.api.bcResumeCampaign(c.id))}>Lanjutkan</button>}
                     {['berjalan', 'dijeda', 'terjadwal'].includes(c.status) && (

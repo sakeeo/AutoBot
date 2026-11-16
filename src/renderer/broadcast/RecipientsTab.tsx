@@ -5,6 +5,7 @@ import { ConfirmButton } from '../ui/ConfirmButton'
 import { DataTable } from '../ui/DataTable'
 import { EmptyState, ErrorState, LoadingState } from '../ui/States'
 import { StatusBadge } from '../ui/StatusBadge'
+import { AddContactForm } from './AddContactForm'
 import { ImportWizard } from './ImportWizard'
 import { REASON_LABEL, SOURCE_LABEL, STATUS_LABEL, STATUS_TONE, formatTime } from './labels'
 
@@ -17,6 +18,7 @@ export function RecipientsTab() {
   const [overview, setOverview] = useState<OverviewView | null>(null)
   const [suppressed, setSuppressed] = useState<Suppressed[]>([])
   const [importing, setImporting] = useState(false)
+  const [adding, setAdding] = useState(false)
   const [message, setMessage] = useState<{ kind: 'success' | 'danger'; text: string } | null>(null)
 
   const load = useCallback(() => {
@@ -39,6 +41,9 @@ export function RecipientsTab() {
       {message && <div className={`alert alert-${message.kind}`} role="status">{message.text}</div>}
 
       <div className="d-flex flex-wrap gap-2 mb-3">
+        <button type="button" className="btn btn-primary" onClick={() => setAdding((v) => !v)}>
+          <i className="bi bi-person-plus me-1" aria-hidden="true" />Tambah kontak
+        </button>
         <button type="button" className="btn btn-outline-secondary" onClick={() => setImporting((v) => !v)}>
           <i className="bi bi-upload me-1" aria-hidden="true" />Impor daftar
         </button>
@@ -51,6 +56,7 @@ export function RecipientsTab() {
         )}
       </div>
 
+      {adding && <AddContactForm onDone={load} onClose={() => setAdding(false)} />}
       {importing && <ImportWizard onDone={load} onClose={() => setImporting(false)} />}
 
       {pending > 0 && (
@@ -84,7 +90,7 @@ export function RecipientsTab() {
             rows={contacts}
             rowKey={(c) => String(c.id)}
             pageSize={10}
-            empty={<EmptyState title="Belum ada penerima." hint="Kontak yang pernah menghubungi bot muncul otomatis; atau impor daftar Anda." />}
+            empty={<EmptyState title="Belum ada penerima." hint="Kontak yang pernah menghubungi bot muncul otomatis; atau tambah kontak dan impor daftar Anda." />}
             columns={[
               { key: 'number', header: 'Nomor', render: (c) => c.number ?? '(id chat)' },
               { key: 'name', header: 'Nama', render: (c) => c.name || '–' },

@@ -92,6 +92,24 @@ const jasa = (): BrandProfile => {
 const turn = (t: ReturnType<typeof setup>, profile: BrandProfile, provider: AiProvider, text: string, extra: object = {}) =>
   t.agent.handleTurn({ chatId: C, text, profile, provider, cfg, dryRun: false, ...extra })
 
+describe('retrieval uses the conversation so far', () => {
+  it('finds documents for a follow-up that has no topic words of its own', async () => {
+    const t = setup()
+    t.conv.appendTurn(C, 'user', 'berapa harga paket website umkm')
+    t.conv.appendTurn(C, 'bot', 'Paket Website UMKM ada ya Kak, mau saya jelaskan?')
+    const p = scripted([out({ reply_parts: ['ok'] })])
+    await turn(t, toko(), p.provider, 'yang itu berapa ya')
+    expect(p.calls[0].user).toContain('Rp1.500.000 per tahun')
+  })
+  it('keeps the message own hits first when it already matches the documents', async () => {
+    const t = setup()
+    t.conv.appendTurn(C, 'user', 'halo')
+    const p = scripted([out({ reply_parts: ['ok'] })])
+    await turn(t, toko(), p.provider, 'domain dan hosting')
+    expect(p.calls[0].user).toContain('sudah termasuk domain dan hosting')
+  })
+})
+
 describe('product mode: checkout', () => {
   it('sends the product checkout link with tracking once, then not again within 24h', async () => {
     const t = setup()

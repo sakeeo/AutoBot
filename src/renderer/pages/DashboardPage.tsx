@@ -7,6 +7,9 @@ import { DataTable } from '../ui/DataTable'
 import { EmptyState, ErrorState, LoadingState } from '../ui/States'
 import { PageHeader } from '../ui/PageHeader'
 import { StatusBadge, type Tone } from '../ui/StatusBadge'
+import { RateRing } from '../dashboard/RateRing'
+import { TrendChart } from '../dashboard/TrendChart'
+import { Counter } from '../dashboard/useCountUp'
 
 const REFRESH_MS = 15_000
 const CONN_TONE: Record<ConnStatus['state'], Tone> = {
@@ -26,9 +29,9 @@ const ROWS: [keyof DashboardPeriod, string][] = [
 const decisionTone = (d: string): Tone =>
   d.startsWith('replied') ? 'success' : d.startsWith('handoff') ? 'info' : d.startsWith('error') ? 'danger' : 'neutral'
 
-function PeriodCard({ title, data }: { title: string; data: DashboardPeriod }) {
+function PeriodCard({ title, icon, data }: { title: string; icon: string; data: DashboardPeriod }) {
   return (
-    <Card title={title} className="h-100">
+    <Card title={title} icon={icon} className="h-100">
       <dl className="metric-list">
         {ROWS.map(([k, label], i) => (
           <Row key={k} label={label} value={data[k]} kpi={i === 0} />
@@ -42,7 +45,7 @@ function Row({ label, value, kpi }: { label: string; value: number; kpi: boolean
   return (
     <>
       <dt>{label}</dt>
-      <dd className={kpi ? 'kpi-value' : undefined}>{value}</dd>
+      <dd className={kpi ? 'kpi-value' : undefined}><Counter value={value} /></dd>
     </>
   )
 }
@@ -103,7 +106,7 @@ export function DashboardPage() {
   if (settings.knowledgeFolders.length === 0) warnings.push('Belum ada folder pengetahuan. Pilih folder di Pengaturan → Pengetahuan.')
 
   return (
-    <div>
+    <div className="dash">
       {header}
 
       {warnings.filter((w) => !dismissed.includes(w)).map((w) => (
@@ -117,7 +120,9 @@ export function DashboardPage() {
       ))}
 
       <div className="d-flex flex-wrap gap-2 mb-4">
-        <StatusBadge tone={CONN_TONE[status]}>{id.state[status]}</StatusBadge>
+        <StatusBadge tone={CONN_TONE[status]}>
+          <span className={`pulse-dot pulse-${CONN_TONE[status]}`} aria-hidden="true" />{id.state[status]}
+        </StatusBadge>
         <StatusBadge tone={aiOn ? 'success' : 'neutral'}>{`AI: ${aiOn ? 'Aktif' : 'Nonaktif'}`}</StatusBadge>
         <StatusBadge tone={data.files.failed > 0 ? 'warning' : 'neutral'}>
           {`${data.files.indexed} file terindeks${data.files.failed > 0 ? ` · ${data.files.failed} gagal` : ''}`}
@@ -125,17 +130,30 @@ export function DashboardPage() {
       </div>
 
       <div className="row g-3 mb-3">
-        <div className="col-md-4"><PeriodCard title="Hari ini" data={data.today} /></div>
-        <div className="col-md-4"><PeriodCard title="7 hari terakhir" data={data.week} /></div>
+        <div className="col-lg-4">
+          <Card title="Tingkat balasan" icon="bi-bullseye" className="h-100">
+            <RateRing replied={data.week.replied} label="7 hari" total={data.week.replied + data.week.refused + data.week.handoff + data.week.errors} />
+          </Card>
+        </div>
+        <div className="col-lg-8">
+          <Card title="Tren 7 hari" icon="bi-activity" className="h-100">
+            {(data.trend ?? []).length > 0 ? <TrendChart data={data.trend} /> : <EmptyState title="Belum ada data tren." />}
+          </Card>
+        </div>
+      </div>
+
+      <div className="row g-3 mb-3">
+        <div className="col-md-4"><PeriodCard title="Hari ini" icon="bi-lightning-charge" data={data.today} /></div>
+        <div className="col-md-4"><PeriodCard title="7 hari terakhir" icon="bi-calendar-week" data={data.week} /></div>
         <div className="col-md-4">
-          <Card title="Menunggu admin" className="h-100">
-            <div className="kpi-value">{data.waitingAdmin}</div>
+          <Card title="Menunggu admin" icon="bi-person-raised-hand" className="h-100">
+            <div className="kpi-value"><Counter value={data.waitingAdmin} /></div>
             <div className="small text-body-secondary">chat yang menunggu balasan manusia</div>
           </Card>
         </div>
       </div>
 
-      <Card title="Aktivitas terakhir">
+      <Card title="Aktivitas terakhir" icon="bi-terminal" className="activity-card">
         <DataTable<LogRow>
           caption="Aktivitas terakhir"
           rows={data.recent}

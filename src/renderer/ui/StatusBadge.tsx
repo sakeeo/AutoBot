@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 export type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral'
 
 const CLASS: Record<Tone, string> = {
@@ -9,6 +10,6 @@ const CLASS: Record<Tone, string> = {
 }
 
 /** Status is always written out; colour only reinforces it (design-guide §7, §10). */
-export function StatusBadge({ tone, children }: { tone: Tone; children: string }) {
+export function StatusBadge({ tone, children }: { tone: Tone; children: ReactNode }) {
   return <span className={`badge ${CLASS[tone]}`}>{children}</span>
 }

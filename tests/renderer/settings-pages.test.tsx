@@ -24,6 +24,7 @@ function setApi(over: Record<string, unknown> = {}) {
     getSettings: vi.fn().mockResolvedValue(settings),
     updateSettings: vi.fn().mockImplementation(async (p) => ({ ...settings, ...p })),
     pickFolder: vi.fn().mockResolvedValue(null), reindex: vi.fn().mockResolvedValue(undefined),
+    kbUpload: vi.fn(), kbDownload: vi.fn(), kbDelete: vi.fn(),
     listFiles: vi.fn().mockResolvedValue([]), onIndexStatus: vi.fn().mockReturnValue(() => undefined),
     hasApiKey: vi.fn().mockResolvedValue(true), deleteApiKey: vi.fn().mockResolvedValue(undefined),
     saveApiKey: vi.fn(), openConsole: vi.fn(),
@@ -89,9 +90,38 @@ describe('KnowledgePage', () => {
     })
     render(<KnowledgePage />)
     await screen.findByText(/faq\.md/)
-    expect(screen.getAllByRole('columnheader').map((c) => c.textContent)).toEqual(['File', 'Status', 'Chunk'])
+    expect(screen.getAllByRole('columnheader').map((c) => c.textContent)).toEqual(['File', 'Status', 'Chunk', 'Aksi'])
     expect(screen.getByText('Terindeks').className).toMatch(/badge/)
     expect(screen.getByText('Gagal: EMPTY').className).toMatch(/badge/)
+  })
+  it('shows only the file name, never the folder path', async () => {
+    setApi({ listFiles: vi.fn().mockResolvedValue([{ file: '/home/u/docs/sub/faq.md', status: 'indexed', chunks: 3 }]) })
+    render(<KnowledgePage />)
+    await screen.findByText('faq.md')
+    expect(screen.queryByText(/\/sub\//)).toBeNull()
+  })
+  it('downloads a file', async () => {
+    const api = setApi({ listFiles: vi.fn().mockResolvedValue([{ file: '/d/faq.md', status: 'indexed', chunks: 3 }]), kbDownload: vi.fn().mockResolvedValue({ ok: true }) })
+    render(<KnowledgePage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Unduh faq.md' }))
+    await waitFor(() => expect(api.kbDownload).toHaveBeenCalledWith('/d/faq.md'))
+  })
+  it('deletes a file only after confirmation', async () => {
+    const api = setApi({ listFiles: vi.fn().mockResolvedValue([{ file: '/d/faq.md', status: 'indexed', chunks: 3 }]), kbDelete: vi.fn().mockResolvedValue({ ok: true }) })
+    render(<KnowledgePage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Hapus faq.md' }))
+    expect(api.kbDelete).not.toHaveBeenCalled()
+    fireEvent.click(await screen.findByRole('button', { name: 'Ya, Hapus faq.md' }))
+    await waitFor(() => expect(api.kbDelete).toHaveBeenCalledWith('/d/faq.md'))
+  })
+  it('uploads files into the first knowledge folder and reports rejections', async () => {
+    const api = setApi({
+      kbUpload: vi.fn().mockResolvedValue({ canceled: false, folder: '/home/u/docs', added: ['a.md'], rejected: [{ name: 'x.exe', reason: 'Format tidak didukung.' }] })
+    })
+    render(<KnowledgePage />)
+    fireEvent.click(await screen.findByRole('button', { name: /unggah file/i }))
+    await waitFor(() => expect(api.kbUpload).toHaveBeenCalledWith('/home/u/docs'))
+    expect((await screen.findByRole('status')).textContent).toMatch(/1 file ditambahkan.*x\.exe: Format tidak didukung/)
   })
 })
 

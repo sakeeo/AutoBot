@@ -49,9 +49,13 @@ export const QuestionSchema = z.string().trim().min(1).max(2000)
 export const LimitSchema = z.number().int().min(1).max(500)
 
 export interface DashboardPeriod { replied: number; refused: number; handoff: number; errors: number; links: number }
+/** One local calendar day of bot decisions, for the trend chart. */
+export interface DashboardDay { day: string; replied: number; refused: number; handoff: number; errors: number }
 export interface DashboardData {
   today: DashboardPeriod
   week: DashboardPeriod
+  /** The last seven local days, oldest first, today last. */
+  trend: DashboardDay[]
   waitingAdmin: number
   recent: LogRow[]
   files: { indexed: number; failed: number }
@@ -130,6 +134,12 @@ export interface Api {
   pickFolder(): Promise<string | null>
   listFiles(): Promise<FileInfo[]>
   reindex(): Promise<void>
+  /** Opens a file picker and copies the chosen files into a knowledge folder (default: the first one). */
+  kbUpload(folder?: string): Promise<{ canceled: boolean; folder: string | null; added: string[]; rejected: { name: string; reason: string }[] }>
+  /** Saves a copy of an indexed knowledge file where the user chooses. */
+  kbDownload(file: string): Promise<{ ok: boolean; canceled?: boolean }>
+  /** Deletes an indexed knowledge file from disk and the index. */
+  kbDelete(file: string): Promise<{ ok: boolean }>
   onIndexStatus(cb: (e: IndexStatusEvent) => void): () => void
   testQuestion(q: string): Promise<TestResult>
   saveApiKey(key: string): Promise<{ ok: boolean; error?: string }>
@@ -169,6 +179,8 @@ export interface Api {
   bcReport(id: number): Promise<ReportView>
   bcExportReport(id: number): Promise<string>
   bcEraseContact(id: number): Promise<void>
+  bcAddContact(input: { name: string; number: string; accepted: boolean; sourceNote: string }): Promise<
+    { ok: true; added: number; notOnWhatsApp: number; blockedBySuppression: number } | { ok: false; error: string }>
   onBroadcast(cb: (e: BroadcastEvent) => void): () => void
   listChats(): Promise<ChatSummary[]>
   getThread(chatId: string): Promise<FeedMessage[]>

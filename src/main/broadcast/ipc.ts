@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto'
-import { AttestSchema, CampaignInputSchema, ConfirmTextSchema, ContactFilterSchema, IdSchema, ImportFileSchema, SafetyPatchSchema } from '../../shared/broadcast'
+import { AddContactSchema, AttestSchema, CampaignInputSchema, ConfirmTextSchema, ContactFilterSchema, IdSchema, ImportFileSchema, SafetyPatchSchema } from '../../shared/broadcast'
 import type {
   Campaign, CampaignView, ContactStatus, Health, ImportPreviewView, OverviewView, ReportView, SafetyView
 } from '../../shared/broadcast'
 import type { BroadcastEngine, SafetySettings } from './engine'
 import { ImportService, parseImport, type ImportPreview } from './import'
+import { normalizePhone } from './identity'
 import { lintMessage, renderTemplate, withFooter } from './lint'
 import { TIER_LIMITS, activeDayIndex, dailyCap, effectiveTier, localDay } from './limits'
 import type { BroadcastStore } from './store'
@@ -157,6 +158,20 @@ export function createBroadcastHandlers(d: BroadcastIpcDeps) {
       if (!held) throw new Error('PREVIEW_NOT_FOUND')
       previews.delete(id)
       return d.importer.commit(held.preview, a)
+    },
+    /** One person typed in by hand goes through the same consent, WhatsApp check and "waiting for reply" path as an import. */
+    async bcAddContact(input: unknown) {
+      isLocked(d)
+      const i = AddContactSchema.parse(input)
+      const number = normalizePhone(i.number)
+      if (!number) return { ok: false as const, error: 'Nomor tidak valid. Contoh: 0812-3456-7890.' }
+      const r = await d.importer.commit(
+        { total: 1, valid: [{ number, name: i.name, vars: {} }], invalid: [], duplicates: 0 },
+        { accepted: i.accepted, sourceNote: i.sourceNote }
+      )
+      if (r.aborted || r.notOnWhatsApp > 0) return { ok: false as const, error: 'Nomor ini tidak terdaftar di WhatsApp.' }
+      if (r.blockedBySuppression > 0) return { ok: false as const, error: 'Nomor ini ada di daftar tolak dan tidak bisa ditambahkan.' }
+      return { ok: true as const, added: r.added, notOnWhatsApp: r.notOnWhatsApp, blockedBySuppression: r.blockedBySuppression }
     },
     bcSendConfirmations() {
       isLocked(d)

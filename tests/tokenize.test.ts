@@ -21,4 +21,11 @@ describe('tokenize', () => {
   it('keeps digits', () => {
     expect(tokenize('promo 2024')).toEqual(['promo', '2024'])
   })
+  it('reads digit reduplication as the word (foto2 -> foto)', () => {
+    expect(tokenize('foto2nya')).toEqual(['foto'])
+    expect(tokenize('foto2')).toEqual(['foto'])
+  })
+  it('maps common English spellings to Indonesian (design -> desain)', () => {
+    expect(tokenize('design')).toEqual(['desain'])
+  })
 })

@@ -13,11 +13,21 @@ const STOPWORDS = new Set(
 
 const CLITICS = ['nya', 'kah', 'lah', 'pun']
 
+const ALIASES: Record<string, string> = { design: 'desain' }
+
+export function isStopword(token: string): boolean {
+  return STOPWORDS.has(token)
+}
+
 function stem(token: string): string {
+  let t = token
   for (const c of CLITICS) {
-    if (token.length - c.length >= 3 && token.endsWith(c)) return token.slice(0, -c.length)
+    if (t.length - c.length >= 3 && t.endsWith(c)) { t = t.slice(0, -c.length); break }
   }
-  return token
+  // "foto2" / "buku2" is the Indonesian reduplication shorthand for "foto-foto".
+  const redup = /^(\p{L}{2,})2$/u.exec(t)
+  if (redup) t = redup[1]
+  return ALIASES[t] ?? t
 }
 
 /** Lowercase word tokens (letters/digits), clitic-stripped, without stopword removal. */

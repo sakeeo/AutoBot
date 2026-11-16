@@ -32,6 +32,35 @@ describe('IndexStore.search', () => {
   })
 })
 
+describe('IndexStore.search typo tolerance', () => {
+  beforeEach(() => {
+    store.replaceFile('umkm.md', 1, [
+      'Cocok untuk usaha laundry, kuliner dan toko. Desain template tersedia, pelanggan cukup kirim logo dan foto dari HP.'
+    ])
+  })
+  it('finds laundry for the misspelling loundry', () => {
+    const hits = store.search('Loundry', 3)
+    expect(hits[0]?.file).toBe('umkm.md')
+    expect(hits[0].coverage).toBe(1)
+  })
+  it('finds design and photos despite typos, English spelling and foto2', () => {
+    const hits = store.search('Bagiamana dwngan design dan foto2nya... ?', 3)
+    expect(hits[0]?.file).toBe('umkm.md')
+    expect(hits[0].coverage).toBeGreaterThanOrEqual(0.5)
+  })
+  it('does not fuzzy-match unrelated words', () => {
+    const hits = store.search('presiden', 3)
+    expect(hits.length === 0 || hits[0].coverage === 0).toBe(true)
+  })
+  it('does not match short tokens fuzzily', () => {
+    expect(store.search('logi', 3).every((h) => h.coverage === 1 || h.coverage === 0)).toBe(true)
+  })
+  it('sees words from files added later', () => {
+    store.replaceFile('baru.md', 2, ['Layanan konsultasi gratis'])
+    expect(store.search('konsultsi', 3)[0]?.file).toBe('baru.md')
+  })
+})
+
 describe('IndexStore file management', () => {
   it('replaceFile does not duplicate chunks', () => {
     store.replaceFile('faq.md', 2, ['Harga kopi susu Rp25.000', 'Jam buka 08.00 sampai 17.00'])
