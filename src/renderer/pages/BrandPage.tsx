@@ -9,6 +9,9 @@ import { HoursTab } from '../brand/HoursTab'
 import { PreviewPanel } from '../brand/PreviewPanel'
 import { ApplyBar } from '../brand/ApplyBar'
 import { ReplyBehaviorTab } from '../brand/ReplyBehaviorTab'
+import { Card } from '../ui/Card'
+import { PageHeader } from '../ui/PageHeader'
+import { LoadingState } from '../ui/States'
 
 const TABS = [
   { id: 'identity', label: 'Identitas & Gaya' },
@@ -23,17 +26,17 @@ export function BrandPage() {
   const { draft, update, flush, apply, reload, issues, dirty, botNumber } = useBrand()
   const [tab, setTab] = useState<(typeof TABS)[number]['id']>('identity')
 
-  if (!draft) return <p className="text-body-secondary">Memuat…</p>
+  if (!draft) return <LoadingState />
 
   return (
     <div>
-      <h2 className="h4 mb-3"><i className="bi bi-bullseye me-2" />Brand & Konversi</h2>
-      <p className="text-body-secondary">
-        Atur siapa bot ini dan ke mana pelanggan diarahkan. Perubahan baru dipakai bot setelah Anda menekan Terapkan.
-      </p>
+      <PageHeader icon="bi-bullseye" title="Brand & Konversi"
+        subtitle="Atur siapa bot ini dan ke mana pelanggan diarahkan. Perubahan baru dipakai bot setelah Anda menekan Terapkan." />
       <div className="row g-3">
         <div className="col-xl-7">
-          <PresetPicker current={draft.preset} onLoaded={reload} />
+          <Card className="mb-3" aria-label="Preset">
+            <PresetPicker current={draft.preset} onLoaded={reload} />
+          </Card>
           <ul className="nav nav-tabs mb-3" role="tablist">
             {TABS.map((t) => (
               <li className="nav-item" role="presentation" key={t.id}>
@@ -44,12 +47,14 @@ export function BrandPage() {
               </li>
             ))}
           </ul>
+          <Card aria-label={TABS.find((t) => t.id === tab)!.label}>
           {tab === 'identity' && <IdentityTab draft={draft} update={update} />}
           {tab === 'rules' && <RulesTab draft={draft} update={update} />}
           {tab === 'links' && <LinksAdminsTab draft={draft} update={update} botNumber={botNumber} />}
           {tab === 'lead' && <LeadTab draft={draft} update={update} />}
           {tab === 'hours' && <HoursTab draft={draft} update={update} />}
           {tab === 'behavior' && <ReplyBehaviorTab />}
+          </Card>
         </div>
         <div className="col-xl-5">
           <PreviewPanel beforeSend={flush} />

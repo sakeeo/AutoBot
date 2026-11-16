@@ -1,3 +1,4 @@
+import { ConfirmButton } from '../ui/ConfirmButton'
 import { useState } from 'react'
 import { ACTION_KINDS, INTENTS, type ActionKind, type BrandProfile, type Intent, type Rule } from '../../shared/brand'
 import { ACTION_LABEL, GOAL_LABEL, INTENT_LABEL, uid } from './labels'
@@ -97,8 +98,7 @@ export function RulesTab({ draft, update }: Props) {
               disabled={i === 0} onClick={() => move(i, -1)}><i className="bi bi-arrow-up" /></button>
             <button type="button" className="btn btn-sm btn-outline-secondary" aria-label={`Turunkan aturan ${i + 1}`}
               disabled={i === draft.rules.length - 1} onClick={() => move(i, 1)}><i className="bi bi-arrow-down" /></button>
-            <button type="button" className="btn btn-sm btn-outline-danger" aria-label={`Hapus aturan ${i + 1}`}
-              onClick={() => setRules((rs) => rs.filter((_, j) => j !== i))}><i className="bi bi-trash" /></button>
+            <ConfirmButton label="Hapus" ariaLabel={`Hapus aturan ${i + 1}`} className="btn btn-sm btn-outline-danger" onConfirm={() => setRules((rs) => rs.filter((_, j) => j !== i))}><i className="bi bi-trash" aria-hidden="true" /></ConfirmButton>
           </li>
         ))}
         {draft.rules.length === 0 && <li className="list-group-item text-body-secondary">Belum ada aturan.</li>}

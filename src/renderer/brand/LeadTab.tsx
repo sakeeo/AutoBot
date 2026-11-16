@@ -1,3 +1,4 @@
+import { ConfirmButton } from '../ui/ConfirmButton'
 import type { BrandProfile } from '../../shared/brand'
 import { TagInput } from './TagInput'
 import { uid } from './labels'
@@ -40,8 +41,7 @@ export function LeadTab({ draft, update }: Props) {
               <label htmlFor={`lm-${i}`} className="form-check-label">Wajib sebelum serah</label>
             </div>
             <div className="col-md-1">
-              <button type="button" className="btn btn-outline-danger w-100" aria-label={`Hapus pertanyaan ${i + 1}`}
-                onClick={() => setQs(sorted.filter((_, j) => j !== i))}><i className="bi bi-trash" /></button>
+              <ConfirmButton label="Hapus" ariaLabel={`Hapus pertanyaan ${i + 1}`} className="btn btn-outline-danger w-100" onConfirm={() => setQs(sorted.filter((_, j) => j !== i))}><i className="bi bi-trash" aria-hidden="true" /></ConfirmButton>
             </div>
           </div>
         </div>
@@ -64,8 +64,7 @@ export function LeadTab({ draft, update }: Props) {
                 onChange={(e) => update((d) => ({ ...d, objections: d.objections.map((x, j) => (j === i ? { ...x, answer: e.target.value } : x)) }))} />
             </div>
             <div className="col-md-1">
-              <button type="button" className="btn btn-outline-danger w-100" aria-label={`Hapus keberatan ${i + 1}`}
-                onClick={() => update((d) => ({ ...d, objections: d.objections.filter((_, j) => j !== i) }))}><i className="bi bi-trash" /></button>
+              <ConfirmButton label="Hapus" ariaLabel={`Hapus keberatan ${i + 1}`} className="btn btn-outline-danger w-100" onConfirm={() => update((d) => ({ ...d, objections: d.objections.filter((_, j) => j !== i) }))}><i className="bi bi-trash" aria-hidden="true" /></ConfirmButton>
             </div>
           </div>
         </div>

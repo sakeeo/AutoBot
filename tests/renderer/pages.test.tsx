@@ -238,3 +238,57 @@ describe('applyTheme', () => {
     expect(document.documentElement.dataset.bsTheme).toBe('dark')
   })
 })
+
+describe('LogPage layout', () => {
+  const rows = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      message_id: `m${i}`, chat_id: 'a@s.whatsapp.net', decision: i % 2 ? 'replied:ai' : 'out_of_context:reply',
+      top_score: i % 2 ? 0.5 : null, sources: i % 2 ? '["faq.md"]' : null, created_at: 1700000000000 + i, text: `pesan ${i}`
+    }))
+  it('shows a table with a single title, text badges and a right-aligned score', async () => {
+    setApi({ getLog: vi.fn().mockResolvedValue(rows(2)) })
+    render(<LogPage />)
+    await screen.findByText('pesan 0')
+    expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(1)
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Waktu', 'Keputusan', 'Skor', 'Sumber', 'Pesan'])
+    expect(screen.getByText('replied:ai').className).toMatch(/badge/)
+    expect(screen.getByText('0.50').closest('td')!.className).toMatch(/text-end/)
+  })
+  it('pages through the log ten rows at a time', async () => {
+    setApi({ getLog: vi.fn().mockResolvedValue(rows(25)) })
+    render(<LogPage />)
+    await screen.findByText('1–10 dari 25')
+    fireEvent.click(screen.getByRole('button', { name: 'Berikutnya' }))
+    expect(screen.getByText('11–20 dari 25')).toBeTruthy()
+  })
+  it('shows an empty state, and an error state with retry', async () => {
+    const api = setApi({ getLog: vi.fn().mockRejectedValueOnce(new Error('x')).mockResolvedValue([]) })
+    render(<LogPage />)
+    expect((await screen.findByRole('alert')).textContent).toMatch(/gagal memuat log/i)
+    fireEvent.click(screen.getByRole('button', { name: 'Coba lagi' }))
+    expect(await screen.findByText(/belum ada pesan/i)).toBeTruthy()
+    expect(api.getLog).toHaveBeenCalledTimes(2)
+  })
+  it('reloads from the Muat ulang button', async () => {
+    const api = setApi({ getLog: vi.fn().mockResolvedValue([]) })
+    render(<LogPage />)
+    await screen.findByText(/belum ada pesan/i)
+    fireEvent.click(screen.getByRole('button', { name: /muat ulang/i }))
+    await waitFor(() => expect(api.getLog).toHaveBeenCalledTimes(2))
+  })
+})
+
+describe('TestPanel layout', () => {
+  it('has a single title, shows a busy state and an error state', async () => {
+    let reject!: (e: Error) => void
+    setApi({ testQuestion: vi.fn().mockReturnValue(new Promise((_, r) => { reject = r })) })
+    render(<TestPanel />)
+    expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(1)
+    fireEvent.change(screen.getByLabelText(/pertanyaan/i), { target: { value: 'halo' } })
+    fireEvent.click(screen.getByRole('button', { name: /uji/i }))
+    expect((await screen.findByRole('status')).textContent).toMatch(/menguji/i)
+    reject(new Error('gateway putus'))
+    expect((await screen.findByRole('alert')).textContent).toMatch(/gateway putus/)
+  })
+})
+

@@ -1,3 +1,4 @@
+import { ConfirmButton } from '../ui/ConfirmButton'
 import type { BrandProfile } from '../../shared/brand'
 import { TagInput } from './TagInput'
 
@@ -105,10 +106,7 @@ export function IdentityTab({ draft, update }: Props) {
                 value={ex.a} onChange={(e) => setStyle({ examples: style.examples.map((x, j) => (j === i ? { ...x, a: e.target.value } : x)) })} />
             </div>
             <div className="col-md-1">
-              <button type="button" className="btn btn-outline-danger w-100" aria-label={`Hapus contoh ${i + 1}`}
-                onClick={() => setStyle({ examples: style.examples.filter((_, j) => j !== i) })}>
-                <i className="bi bi-trash" />
-              </button>
+              <ConfirmButton label="Hapus" ariaLabel={`Hapus contoh ${i + 1}`} className="btn btn-outline-danger w-100" onConfirm={() => setStyle({ examples: style.examples.filter((_, j) => j !== i) })}><i className="bi bi-trash" aria-hidden="true" /></ConfirmButton>
             </div>
           </div>
         </div>

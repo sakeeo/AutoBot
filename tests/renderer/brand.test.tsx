@@ -40,7 +40,6 @@ const setApi = (draft: BrandProfile, over?: Record<string, unknown>) => {
 const lastSaved = (api: ReturnType<typeof makeApi>): BrandProfile =>
   api.saveBrandDraft.mock.calls[api.saveBrandDraft.mock.calls.length - 1][0]
 
-beforeEach(() => { window.confirm = () => true })
 afterEach(cleanup)
 
 describe('BrandPage: identity and presets', () => {
@@ -68,16 +67,19 @@ describe('BrandPage: identity and presets', () => {
     render(<BrandPage />)
     await screen.findByRole('option', { name: 'Jasa / Agensi' })
     fireEvent.change(await screen.findByLabelText('Jenis bisnis (preset)'), { target: { value: 'jasa_agensi' } })
+    expect(api.loadPreset).not.toHaveBeenCalled()
+    fireEvent.click(await screen.findByRole('button', { name: 'Muat preset' }))
     await waitFor(() => expect(api.loadPreset).toHaveBeenCalledWith('jasa_agensi'))
   })
   it('does not load the preset when the user declines the confirmation', async () => {
-    window.confirm = () => false
     const api = setApi(profile())
     render(<BrandPage />)
     await screen.findByRole('option', { name: 'Jasa / Agensi' })
     fireEvent.change(await screen.findByLabelText('Jenis bisnis (preset)'), { target: { value: 'jasa_agensi' } })
+    fireEvent.click(await screen.findByRole('button', { name: 'Batal' }))
     await new Promise((r) => setTimeout(r, 30))
     expect(api.loadPreset).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'Muat preset' })).toBeNull()
   })
   it('adds and removes style examples', async () => {
     const api = setApi(profile())
@@ -85,6 +87,8 @@ describe('BrandPage: identity and presets', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Tambah contoh' }))
     await waitFor(() => expect(lastSaved(api).style.examples).toHaveLength(1))
     fireEvent.click(screen.getByRole('button', { name: 'Hapus contoh 1' }))
+    expect(lastSaved(api).style.examples).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Ya, Hapus contoh 1' }))
     await waitFor(() => expect(lastSaved(api).style.examples).toHaveLength(0))
   })
 })
@@ -123,6 +127,8 @@ describe('BrandPage: conversion rules', () => {
     fireEvent.click(await screen.findByLabelText('Aktifkan aturan 1'))
     await waitFor(() => expect(lastSaved(api).rules[0].enabled).toBe(false))
     fireEvent.click(screen.getByRole('button', { name: 'Hapus aturan 1' }))
+    expect(lastSaved(api).rules.map((r) => r.id)).toEqual(['r1', 'r2'])
+    fireEvent.click(screen.getByRole('button', { name: 'Ya, Hapus aturan 1' }))
     await waitFor(() => expect(lastSaved(api).rules.map((r) => r.id)).toEqual(['r2']))
   })
   it('adds a rule from the builder form', async () => {
@@ -213,6 +219,7 @@ describe('BrandPage: apply bar', () => {
     await screen.findByRole('option', { name: /v2 —/ })
     fireEvent.change(await screen.findByLabelText('Versi tersimpan'), { target: { value: '2' } })
     fireEvent.click(screen.getByRole('button', { name: 'Pulihkan' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ya, pulihkan' }))
     await waitFor(() => expect(api.restoreBrandVersion).toHaveBeenCalledWith(2))
   })
 })
@@ -319,3 +326,69 @@ describe('BrandPage: theming', () => {
     expect(container.querySelector('.card')).not.toBeNull()
   })
 })
+
+describe('BrandPage: layout and destructive actions', () => {
+  it('shows a loading state, then a single page title and tabs inside cards', async () => {
+    const api = setApi(profile())
+    api.getBrand.mockReturnValueOnce(new Promise(() => undefined))
+    const first = render(<BrandPage />)
+    expect(screen.getByRole('status').textContent).toMatch(/memuat/i)
+    first.unmount()
+    setApi(profile())
+    render(<BrandPage />)
+    await screen.findByLabelText('Nama bisnis')
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent?.trim())).toEqual(['Brand & Konversi'])
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
+      'Identitas & Gaya', 'Arah Konversi', 'Tautan & Admin', 'Lead & Pesan', 'Jam & Batas', 'Perilaku balasan'
+    ])
+    expect(screen.getByRole('button', { name: 'Terapkan' }).className).toMatch(/btn-primary/)
+  })
+
+  it('removing a link takes two steps', async () => {
+    const api = setApi(profile())
+    render(<BrandPage />)
+    fireEvent.click(await screen.findByRole('tab', { name: 'Tautan & Admin' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Hapus tautan 1' }))
+    expect(api.saveBrandDraft).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Ya, Hapus tautan 1' }))
+    await waitFor(() => expect(lastSaved(api).links).toHaveLength(0))
+  })
+
+  it('removing an admin takes two steps', async () => {
+    const api = setApi(profile({ admins: [{ id: 'a1', name: 'Budi', number: '6281234567890', notifyWhatsapp: true }] }))
+    render(<BrandPage />)
+    fireEvent.click(await screen.findByRole('tab', { name: 'Tautan & Admin' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Hapus admin 1' }))
+    expect(api.saveBrandDraft).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Ya, Hapus admin 1' }))
+    await waitFor(() => expect(lastSaved(api).admins).toHaveLength(0))
+  })
+
+  it('removing a lead question or an objection takes two steps', async () => {
+    const api = setApi(profile({ objections: [{ trigger: 'mahal', answer: 'ada cicilan' }] }))
+    render(<BrandPage />)
+    fireEvent.click(await screen.findByRole('tab', { name: 'Lead & Pesan' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Hapus keberatan 1' }))
+    expect(api.saveBrandDraft).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Ya, Hapus keberatan 1' }))
+    await waitFor(() => expect(lastSaved(api).objections).toHaveLength(0))
+    const before = lastSaved(api).leadQuestions.length
+    fireEvent.click(screen.getByRole('button', { name: 'Hapus pertanyaan 1' }))
+    expect(lastSaved(api).leadQuestions).toHaveLength(before)
+    fireEvent.click(screen.getByRole('button', { name: 'Ya, Hapus pertanyaan 1' }))
+    await waitFor(() => expect(lastSaved(api).leadQuestions).toHaveLength(before - 1))
+  })
+
+  it('restoring a saved version takes two steps', async () => {
+    const api = setApi(profile(), { listBrandVersions: vi.fn().mockResolvedValue([{ version: 3, createdAt: 1700000000000 }]) })
+    render(<BrandPage />)
+    const select = await screen.findByLabelText('Versi tersimpan')
+    await screen.findByRole('option', { name: /v3/ })
+    fireEvent.change(select, { target: { value: '3' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Pulihkan' }))
+    expect(api.restoreBrandVersion).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Ya, pulihkan' }))
+    await waitFor(() => expect(api.restoreBrandVersion).toHaveBeenCalledWith(3))
+  })
+})
+

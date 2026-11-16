@@ -1,5 +1,9 @@
 import { useState } from 'react'
 import type { TestResult } from '../../shared/ipc'
+import { Card } from '../ui/Card'
+import { PageHeader } from '../ui/PageHeader'
+import { ErrorState, LoadingState } from '../ui/States'
+import { StatusBadge } from '../ui/StatusBadge'
 
 export function TestPanel() {
   const [q, setQ] = useState('')
@@ -21,9 +25,9 @@ export function TestPanel() {
 
   return (
     <div>
-      <h2 className="h4 mb-3"><i className="bi bi-chat-dots me-2" />Uji Jawaban</h2>
-      <p className="text-body-secondary">Coba pertanyaan di sini tanpa mengirim apa pun ke WhatsApp.</p>
-      <form className="row g-2 mb-4" onSubmit={(e) => { e.preventDefault(); if (q.trim()) run() }}>
+      <PageHeader icon="bi-chat-dots" title="Uji Jawaban" subtitle="Coba pertanyaan di sini tanpa mengirim apa pun ke WhatsApp." />
+      <Card className="mb-3" aria-label="Formulir uji">
+      <form className="row g-2" onSubmit={(e) => { e.preventDefault(); if (q.trim()) run() }}>
         <div className="col">
           <label htmlFor="q" className="visually-hidden">Pertanyaan</label>
           <input id="q" className="form-control" placeholder="Ketik pertanyaan pelanggan…" value={q}
@@ -33,8 +37,10 @@ export function TestPanel() {
           <button className="btn btn-primary" type="submit" disabled={busy || !q.trim()}>Uji</button>
         </div>
       </form>
+      </Card>
 
-      {err && <div className="alert alert-danger">{err}</div>}
+      {busy && <LoadingState label="Menguji…" />}
+      {err && <ErrorState message={err} />}
 
       {res && res.decision.kind === 'out_of_context' && (
         <div className="alert alert-secondary">
@@ -46,17 +52,11 @@ export function TestPanel() {
 
       {res && res.decision.kind === 'answerable' && (
         <>
-          <div className="card mb-3">
-            <div className="card-header d-flex justify-content-between">
-              <span>Jawaban</span>
-              <span className="badge text-bg-info">{res.via ?? 'tidak ada jawaban'}</span>
-            </div>
-            <div className="card-body">
-              {res.answer
-                ? <pre className="mb-0" style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>{res.answer.text}</pre>
-                : <span className="text-body-secondary">AI menilai pertanyaan ini tidak terjawab oleh dokumen.</span>}
-            </div>
-          </div>
+          <Card title="Jawaban" className="mb-3" actions={<StatusBadge tone="info">{res.via ?? 'tidak ada jawaban'}</StatusBadge>}>
+            {res.answer
+              ? <pre className="mb-0" style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>{res.answer.text}</pre>
+              : <span className="text-body-secondary">AI menilai pertanyaan ini tidak terjawab oleh dokumen.</span>}
+          </Card>
           <h3 className="h6">Potongan dokumen terambil</h3>
           <ul className="list-group">
             {res.decision.hits.map((h) => (

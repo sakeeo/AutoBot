@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Issue } from '../../shared/brand'
+import { Card } from '../ui/Card'
+import { ConfirmButton } from '../ui/ConfirmButton'
 
 type ApplyResult = { ok: boolean; version?: number } | void
 
@@ -55,17 +57,17 @@ export function ApplyBar({ issues, dirty, onApply, onChanged }: {
   }
 
   return (
-    <div className="card mt-3">
-      <div className="card-body">
+    <Card className="mt-3" aria-label="Terapkan perubahan">
+      <div>
         {issues.map((i, n) => (
           <div key={n} className={`alert py-2 mb-2 ${i.level === 'error' ? 'alert-danger' : 'alert-warning'}`}>
             <i className={`bi ${i.level === 'error' ? 'bi-x-octagon' : 'bi-exclamation-triangle'} me-2`} />{i.message}
           </div>
         ))}
-        {message && <div className="alert alert-success py-2 mb-2">{message}</div>}
+        {message && <div className="alert alert-success py-2 mb-2" role="status">{message}</div>}
 
         <div className="d-flex flex-wrap gap-2 align-items-center">
-          <button type="button" className="btn btn-success" disabled={hasErrors || busy} onClick={apply}>Terapkan</button>
+          <button type="button" className="btn btn-primary" disabled={hasErrors || busy} onClick={apply}>Terapkan</button>
           {dirty && <span className="small text-body-secondary">Perubahan belum diterapkan ke bot.</span>}
           <div className="ms-auto d-flex flex-wrap gap-2 align-items-center">
             <label htmlFor="versions" className="visually-hidden">Versi tersimpan</label>
@@ -77,7 +79,8 @@ export function ApplyBar({ issues, dirty, onApply, onChanged }: {
                 </option>
               ))}
             </select>
-            <button type="button" className="btn btn-outline-secondary" disabled={!chosen} onClick={restore}>Pulihkan</button>
+            <ConfirmButton label="Pulihkan" confirmLabel="Ya, pulihkan" className="btn btn-outline-secondary" disabled={!chosen}
+              onConfirm={restore} />
             <button type="button" className="btn btn-outline-secondary" onClick={doExport}>Ekspor</button>
             <button type="button" className="btn btn-outline-secondary" onClick={() => fileRef.current?.click()}>Impor</button>
             <input ref={fileRef} type="file" accept="application/json,.json" className="d-none" aria-label="Berkas profil"
@@ -85,6 +88,6 @@ export function ApplyBar({ issues, dirty, onApply, onChanged }: {
           </div>
         </div>
       </div>
-    </div>
+    </Card>
   )
 }

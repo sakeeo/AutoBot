@@ -1,3 +1,4 @@
+import { ConfirmButton } from '../ui/ConfirmButton'
 import { normalizeNumber, type BrandProfile, type LinkEntry } from '../../shared/brand'
 import { uid } from './labels'
 
@@ -52,10 +53,7 @@ export function LinksAdminsTab({ draft, update, botNumber }: Props) {
                 checked={l.tracking} onChange={(e) => setLink(i, { tracking: e.target.checked })} />
             </div>
             <div className="col-md-1">
-              <button type="button" className="btn btn-outline-danger w-100" aria-label={`Hapus tautan ${i + 1}`}
-                onClick={() => update((d) => ({ ...d, links: d.links.filter((_, j) => j !== i) }))}>
-                <i className="bi bi-trash" />
-              </button>
+              <ConfirmButton label="Hapus" ariaLabel={`Hapus tautan ${i + 1}`} className="btn btn-outline-danger w-100" onConfirm={() => update((d) => ({ ...d, links: d.links.filter((_, j) => j !== i) }))}><i className="bi bi-trash" aria-hidden="true" /></ConfirmButton>
             </div>
           </div>
         </div>
@@ -90,10 +88,7 @@ export function LinksAdminsTab({ draft, update, botNumber }: Props) {
                 <label htmlFor={`adm-wa-${i}`} className="form-check-label">Kabari lewat WhatsApp</label>
               </div>
               <div className="col-md-1">
-                <button type="button" className="btn btn-outline-danger w-100" aria-label={`Hapus admin ${i + 1}`}
-                  onClick={() => update((d) => ({ ...d, admins: d.admins.filter((_, j) => j !== i) }))}>
-                  <i className="bi bi-trash" />
-                </button>
+                <ConfirmButton label="Hapus" ariaLabel={`Hapus admin ${i + 1}`} className="btn btn-outline-danger w-100" onConfirm={() => update((d) => ({ ...d, admins: d.admins.filter((_, j) => j !== i) }))}><i className="bi bi-trash" aria-hidden="true" /></ConfirmButton>
               </div>
             </div>
           </div>
