@@ -1,12 +1,10 @@
 import type { CampaignKind } from '../../shared/broadcast'
 
-export interface Outcome { at: number; ok: boolean; kind: CampaignKind; toNonChat: boolean }
+export interface Outcome { at: number; ok: boolean; kind: CampaignKind; toNonChat: boolean; /** The person wrote back after this send. */ replied: boolean }
 export interface BreakerSignals {
   /** Opt-outs among the last 30 sends. */
   lastOptOuts: number
   lastComplaints: number
-  /** Replies received from non-chat (imported) contacts that were messaged. */
-  repliesAmongNonChat: number
 }
 
 const NO_REPLY_LIMIT: Record<CampaignKind, number> = { broadcast: 30, konfirmasi: 20 }
@@ -34,7 +32,9 @@ export function evaluateBreaker(
     return { trip: true, reason: 'Tiga penerima berhenti berlangganan dalam 30 pengiriman terakhir. Tinjau isi pesan.' }
 
   const toNonChat = recent.filter((o) => o.ok && o.toNonChat).length
-  if (toNonChat >= NO_REPLY_LIMIT[kind] && sig.repliesAmongNonChat === 0)
+  // Replies are counted among these very sends, not for all time.
+  const replies = recent.filter((o) => o.ok && o.toNonChat && o.replied).length
+  if (toNonChat >= NO_REPLY_LIMIT[kind] && replies === 0)
     return { trip: true, reason: `${toNonChat} pesan terkirim ke kontak impor tanpa satu pun balasan. Kualitas daftar patut diragukan.` }
   return { trip: false }
 }

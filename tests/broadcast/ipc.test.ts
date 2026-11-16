@@ -57,7 +57,8 @@ describe('writers refuse while the app is locked; stop-all never does', () => {
       () => t.h.bcImportPreview({ name: 'a.csv', data: 'nomor\n0812' }),
       () => t.h.bcImportCommit('p', { accepted: true, sourceNote: 'Formulir pendaftaran' }),
       () => t.h.bcSendConfirmations(),
-      () => t.h.bcEraseContact(1)
+      () => t.h.bcEraseContact(1),
+      () => t.h.bcDiscardDraft(1)
     ]
     for (const c of calls) await expect(Promise.resolve().then(c)).rejects.toThrow('LOCKED')
     expect(() => t.h.bcStopAll()).not.toThrow()
@@ -228,5 +229,53 @@ describe('AttestSchema', () => {
     expect(AttestSchema.safeParse({ accepted: true, sourceNote: 'singkat' }).success).toBe(false)
     expect(AttestSchema.safeParse({ accepted: false, sourceNote: 'Formulir pendaftaran' }).success).toBe(false)
     expect(AttestSchema.safeParse({ accepted: true, sourceNote: 'Formulir pendaftaran', x: 1 }).success).toBe(false)
+  })
+})
+
+describe('hardening of the settings and resume rules', () => {
+  it('keeps the send window to daytime hours and a real time zone', () => {
+    const t = setup()
+    t.ready()
+    const win = (start: string, end: string, timezone = 'Asia/Makassar') => t.h.bcSetSafety({ window: { start, end, timezone } })
+    expect(win('05:00', '18:00')).toMatchObject({ ok: false })
+    expect(win('09:00', '23:00')).toMatchObject({ ok: false })
+    expect(win('09:00', '18:00', 'Mars/Olympus')).toMatchObject({ ok: false })
+    expect(win('06:00', '22:00')).toMatchObject({ ok: true })
+  })
+  it('resumes only a paused campaign: a draft cannot be started that way', () => {
+    const t = setup()
+    t.ready()
+    t.people(3)
+    const c = t.h.bcCreateCampaign({ name: 'x', template: good, audience: 'semua' }) as { campaign: { id: number } }
+    expect(t.h.bcResumeCampaign(c.campaign.id)).toMatchObject({ ok: false })
+    expect(t.store.getCampaign(c.campaign.id)!.status).toBe('draf')
+    t.h.bcStartCampaign(c.campaign.id)
+    t.h.bcPauseCampaign(c.campaign.id)
+    expect(t.h.bcResumeCampaign(c.campaign.id)).toMatchObject({ ok: true })
+  })
+  it('discards a draft but refuses to discard a campaign that has started', () => {
+    const t = setup()
+    t.ready()
+    t.people(2)
+    const d = t.h.bcCreateCampaign({ name: 'd', template: good, audience: 'semua' }) as { campaign: { id: number } }
+    const l = t.h.bcCreateCampaign({ name: 'l', template: good, audience: 'semua' }) as { campaign: { id: number } }
+    t.h.bcStartCampaign(l.campaign.id)
+    expect(t.h.bcDiscardDraft(d.campaign.id)).toEqual({ ok: true })
+    expect(t.h.bcDiscardDraft(l.campaign.id)).toEqual({ ok: false })
+    expect(t.store.getCampaign(d.campaign.id)).toBeNull()
+  })
+  it('validates the contact filter', () => {
+    const t = setup()
+    expect(() => t.h.bcContacts({ status: 'sembarang' })).toThrow()
+    expect(t.h.bcContacts({ status: 'aktif' })).toEqual([])
+  })
+  it('neutralises a formula that hides behind leading spaces', () => {
+    const t = setup()
+    t.ready()
+    const number = '628130000999'
+    t.store.upsertContact({ number, jid: `${number}@s.whatsapp.net`, name: '  =cmd', source: 'chat', status: 'aktif' })
+    const c = t.h.bcCreateCampaign({ name: 'x', template: good, audience: 'semua' }) as { campaign: { id: number } }
+    t.h.bcStartCampaign(c.campaign.id)
+    expect(t.h.bcExportReport(c.campaign.id)).toContain("'  =cmd")
   })
 })

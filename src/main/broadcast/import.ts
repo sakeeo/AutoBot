@@ -17,13 +17,24 @@ export interface ImportPreview {
   duplicates: number
 }
 
+/** A phone cell as exact digits: spreadsheets store numbers as floats and print big ones as 6.28E+12, which is garbage. */
+function numberCell(v: unknown): string {
+  const s = typeof v === 'number'
+    ? (Number.isInteger(v) && v > 0 && v < Number.MAX_SAFE_INTEGER ? BigInt(v).toString() : String(v))
+    : String(v ?? '').trim()
+  if (/^\d+(\.\d+)?[eE][+-]?\d+$/.test(s)) return '#exponen'
+  // 6.28123E+12 read back as a number is 6281230000000: precision is already lost, and no real number ends in 6+ zeros.
+  if (/^\d{11,}$/.test(s) && /0{6}$/.test(s)) return '#rusak'
+  return s
+}
+
 const headerKey = (h: string): string => h.trim().toLowerCase().replace(/\s+/g, ' ')
 
 /** Reads a CSV or XLSX list: column "nomor" is required, "nama" is optional, every other column becomes a variable. */
 export function parseImport(file: { name: string; data: Uint8Array | string }): ImportPreview {
   const wb = typeof file.data === 'string' ? XLSX.read(file.data, { type: 'string' }) : XLSX.read(file.data, { type: 'array' })
   const sheet = wb.Sheets[wb.SheetNames[0]]
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '', raw: false })
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '', raw: true })
   if (rows.length > MAX_IMPORT_ROWS) throw new Error('TOO_MANY_ROWS')
   const keys = rows.length > 0 ? Object.keys(rows[0]) : (XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1 })[0] ?? []).map(String)
   const numberKey = keys.find((k) => NUMBER_HEADERS.includes(headerKey(k)))
@@ -33,7 +44,7 @@ export function parseImport(file: { name: string; data: Uint8Array | string }): 
   const out: ImportPreview = { total: rows.length, valid: [], invalid: [], duplicates: 0 }
   const seen = new Set<string>()
   rows.forEach((row, i) => {
-    const raw = String(row[numberKey] ?? '').trim()
+    const raw = numberCell(row[numberKey])
     const rowNo = i + 2 // the header is row 1
     if (!raw) { out.invalid.push({ row: rowNo, value: '', reason: 'Nomor kosong.' }); return }
     const number = normalizePhone(raw)

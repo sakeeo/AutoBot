@@ -59,6 +59,7 @@ export const SafetyPatchSchema = z
   .partial()
   .strict()
 export const ConfirmTextSchema = z.string().max(20).optional()
+export const ContactFilterSchema = z.object({ status: z.enum(['aktif', 'menunggu_persetujuan', 'tidak_aktif']).optional() }).strict()
 
 export interface SafetyView {
   configured: boolean

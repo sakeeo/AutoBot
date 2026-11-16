@@ -11,7 +11,10 @@ const CONNECTION_REPLACED = 440
 
 /** Loose shape of Baileys' WAMessage — only what we read. */
 export interface RawWaMessage {
-  key?: { id?: string | null; remoteJid?: string | null; fromMe?: boolean | null; participant?: string | null }
+  key?: {
+    id?: string | null; remoteJid?: string | null; fromMe?: boolean | null; participant?: string | null
+    remoteJidAlt?: string | null; senderPn?: string | null
+  }
   message?: any
   messageTimestamp?: number | { toNumber(): number } | null
 }
@@ -42,6 +45,7 @@ export function normalizeMessage(raw: RawWaMessage): IncomingMessage | null {
     m.videoMessage?.caption ||
     m.documentMessage?.caption ||
     null
+  const alt = raw.key?.remoteJidAlt ?? raw.key?.senderPn ?? undefined
   const ts = raw.messageTimestamp
   const seconds = ts == null ? NaN : typeof ts === 'number' ? ts : Number(ts.toNumber?.() ?? ts)
   return {
@@ -51,7 +55,8 @@ export function normalizeMessage(raw: RawWaMessage): IncomingMessage | null {
     isGroup: chatId.endsWith('@g.us'),
     fromMe: !!raw.key?.fromMe,
     text,
-    timestamp: Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : Date.now()
+    timestamp: Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : Date.now(),
+    ...(alt ? { altJid: alt } : {})
   }
 }
 

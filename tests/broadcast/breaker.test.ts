@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { evaluateBreaker, type Outcome } from '../../src/main/broadcast/breaker'
 
-const out = (ok: boolean, o: Partial<Outcome> = {}): Outcome => ({ at: 1, ok, kind: 'broadcast', toNonChat: false, ...o })
+const out = (ok: boolean, o: Partial<Outcome> = {}): Outcome => ({ at: 1, ok, kind: 'broadcast', toNonChat: false, replied: false, ...o })
 const many = (n: number, ok = true, o: Partial<Outcome> = {}): Outcome[] => Array.from({ length: n }, () => out(ok, o))
 const quiet = { lastOptOuts: 0, lastComplaints: 0, repliesAmongNonChat: 0 }
 
@@ -34,7 +34,7 @@ describe('evaluateBreaker', () => {
   it('trips after 30 sends to non-chat contacts with no replies; confirmations after 20', () => {
     expect(evaluateBreaker(many(30, true, { toNonChat: true }), quiet, 'broadcast').trip).toBe(true)
     expect(evaluateBreaker(many(29, true, { toNonChat: true }), quiet, 'broadcast').trip).toBe(false)
-    expect(evaluateBreaker(many(30, true, { toNonChat: true }), { ...quiet, repliesAmongNonChat: 1 }, 'broadcast').trip).toBe(false)
+    expect(evaluateBreaker([...many(29, true, { toNonChat: true }), out(true, { toNonChat: true, replied: true })], quiet, 'broadcast').trip).toBe(false)
     expect(evaluateBreaker(many(20, true, { toNonChat: true, kind: 'konfirmasi' }), quiet, 'konfirmasi').trip).toBe(true)
     expect(evaluateBreaker(many(19, true, { toNonChat: true, kind: 'konfirmasi' }), quiet, 'konfirmasi').trip).toBe(false)
   })
@@ -44,5 +44,12 @@ describe('evaluateBreaker', () => {
   it('always explains a trip in Indonesian', () => {
     const r = evaluateBreaker(many(3, false), quiet, 'broadcast')
     expect(r.trip && r.reason.length).toBeGreaterThan(10)
+  })
+})
+
+describe('evaluateBreaker: replies are judged within the window, not for all time', () => {
+  it('an old reply from some other contact does not excuse thirty silent sends', () => {
+    const recent = [out(true, { toNonChat: true, replied: true }), ...many(29, true, { toNonChat: true })]
+    expect(evaluateBreaker(recent.slice(1).concat(many(1, true, { toNonChat: true })), quiet, 'broadcast').trip).toBe(true)
   })
 })

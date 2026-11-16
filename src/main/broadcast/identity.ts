@@ -4,7 +4,8 @@ import { createHash } from 'node:crypto'
 export function normalizePhone(raw: string): string | null {
   const digits = raw.replace(/\D/g, '')
   if (!digits) return null
-  const n = digits.startsWith('0') ? '62' + digits.slice(1) : digits
+  // A spreadsheet drops the leading 0 of 0812…, leaving 812…: still an Indonesian mobile number.
+  const n = digits.startsWith('0') ? '62' + digits.slice(1) : /^8\d{8,11}$/.test(digits) ? '62' + digits : digits
   return n.length >= 8 && n.length <= 15 ? n : null
 }
 

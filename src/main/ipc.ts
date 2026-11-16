@@ -133,6 +133,7 @@ export function registerIpc(d: IpcDeps): void {
   handle(C.bcPauseCampaign, (_e, id: unknown) => bc.bcPauseCampaign(id))
   handle(C.bcResumeCampaign, (_e, id: unknown) => bc.bcResumeCampaign(id))
   handle(C.bcStopCampaign, (_e, id: unknown) => bc.bcStopCampaign(id))
+  handle(C.bcDiscardDraft, (_e, id: unknown) => bc.bcDiscardDraft(id))
   handle(C.bcStopAll, () => bc.bcStopAll())
   handle(C.bcGetSafety, () => bc.bcGetSafety())
   handle(C.bcSetSafety, (_e, p: unknown) => bc.bcSetSafety(p))

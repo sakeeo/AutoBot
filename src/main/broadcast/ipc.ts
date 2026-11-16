@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { AttestSchema, CampaignInputSchema, ConfirmTextSchema, IdSchema, ImportFileSchema, SafetyPatchSchema } from '../../shared/broadcast'
+import { AttestSchema, CampaignInputSchema, ConfirmTextSchema, ContactFilterSchema, IdSchema, ImportFileSchema, SafetyPatchSchema } from '../../shared/broadcast'
 import type {
   Campaign, CampaignView, ContactStatus, Health, ImportPreviewView, OverviewView, ReportView, SafetyView
 } from '../../shared/broadcast'
@@ -44,7 +44,7 @@ const toMinutes = (hhmm: string): number => {
 
 /** A spreadsheet reads a cell starting with = + - @ as a formula; a leading quote makes it plain text. */
 function csvCell(value: string): string {
-  const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value
+  const safe = /^\s*[=+\-@]|^[\t\r]/.test(value) ? `'${value}` : value
   return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe
 }
 
@@ -103,8 +103,8 @@ export function createBroadcastHandlers(d: BroadcastIpcDeps) {
       }
     },
     bcContacts(filter?: unknown) {
-      const status = (filter as { status?: ContactStatus } | undefined)?.status
-      return store.listContacts({ status, limit: 500 })
+      const f = ContactFilterSchema.parse(filter ?? {})
+      return store.listContacts({ status: f.status as ContactStatus | undefined, limit: 500 })
     },
     bcSuppressed() {
       return store.listSuppressed()
@@ -201,8 +201,14 @@ export function createBroadcastHandlers(d: BroadcastIpcDeps) {
       const cid = IdSchema.parse(id)
       const notReady = ready()
       if (notReady) return { ok: false as const, error: notReady }
+      // Only a paused campaign can be resumed; starting a draft goes through bcStartCampaign (and its KIRIM check).
+      if (store.getCampaign(cid)?.status !== 'dijeda') return { ok: false as const, error: 'Hanya kampanye yang dijeda yang bisa dilanjutkan.' }
       engine.start(cid)
       return { ok: true as const }
+    },
+    bcDiscardDraft(id: unknown) {
+      isLocked(d)
+      return { ok: store.deleteDraft(IdSchema.parse(id)) }
     },
     bcStopCampaign(id: unknown) {
       isLocked(d)
@@ -221,6 +227,11 @@ export function createBroadcastHandlers(d: BroadcastIpcDeps) {
       const s = readStored(store, now)
       if (p.window && toMinutes(p.window.start) >= toMinutes(p.window.end))
         return { ok: false as const, error: 'Jam mulai harus sebelum jam selesai.' }
+      if (p.window && (toMinutes(p.window.start) < 6 * 60 || toMinutes(p.window.end) > 22 * 60))
+        return { ok: false as const, error: 'Jam kirim harus di antara 06:00 dan 22:00.' }
+      if (p.window) {
+        try { new Intl.DateTimeFormat('en-US', { timeZone: p.window.timezone }) } catch { return { ok: false as const, error: 'Zona waktu tidak dikenal.' } }
+      }
       if (p.changeNumber) {
         if (!p.confirm) return { ok: false as const, error: 'Konfirmasi diperlukan untuk mengganti nomor.' }
         store.setState('safety', JSON.stringify({ ...s, configured: false, enabled: false, ageDays: 0, declaredAt: now, warmupFrom: now }))

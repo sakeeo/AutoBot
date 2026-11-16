@@ -20,6 +20,6 @@ export const TIER_LABEL: Record<Tier, string> = {
 export const SKIP_LABEL: Record<string, string> = {
   tolak: 'Ada di daftar tolak', tidak_aktif: 'Tidak aktif', menunggu_persetujuan: 'Belum menyetujui',
   nomor_tidak_diketahui: 'Nomor tidak diketahui', terlalu_cepat: 'Baru saja dikirimi', batas_30_hari: 'Sudah 4 pesan dalam 30 hari',
-  dihentikan: 'Kampanye dihentikan'
+  dihentikan: 'Kampanye dihentikan', sudah_dikonfirmasi: 'Sudah dikonfirmasi'
 }
 export const formatTime = (at: number | null): string => (at ? new Date(at).toLocaleString('id-ID') : '–')

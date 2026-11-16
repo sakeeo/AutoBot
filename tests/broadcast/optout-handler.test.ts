@@ -14,19 +14,21 @@ function setup(opts: { broadcastTo?: boolean; human?: boolean } = {}) {
   const store = new BroadcastStore(db, clock)
   const replies: { chatId: string; text: string }[] = []
   const signals: string[] = []
+  const complaints: string[] = []
   const flags = { broadcastTo: opts.broadcastTo ?? true, human: opts.human ?? false }
   const handler = new OptOutHandler({
     store, clock,
     wasBroadcastTo: () => flags.broadcastTo,
     reply: async (chatId, text) => { replies.push({ chatId, text }) },
     isHumanHandling: () => flags.human,
-    onSignal: (k) => signals.push(k)
+    onSignal: (k) => signals.push(k),
+    onComplaint: (m) => complaints.push(m.text ?? '')
   })
   let n = 0
   const msg = (text: string | null, o: Partial<IncomingMessage> = {}): IncomingMessage => ({
     id: `w${++n}`, chatId: JID, sender: JID, isGroup: false, fromMe: false, text, timestamp: clock.now(), ...o
   })
-  return { store, clock, replies, signals, flags, handler, msg }
+  return { store, clock, replies, signals, complaints, flags, handler, msg }
 }
 
 describe('OptOutHandler: stop', () => {
@@ -112,14 +114,50 @@ describe('OptOutHandler: complaints and replies', () => {
 })
 
 describe('OptOutHandler: what it ignores', () => {
-  it('ignores groups, own messages, broadcast lists, stale and non-text messages', async () => {
+  it('ignores groups, own messages, broadcast lists and non-text messages', async () => {
     const t = setup()
     expect(await t.handler.handle(t.msg('stop', { isGroup: true, chatId: '99@g.us' }))).toBe(false)
     expect(await t.handler.handle(t.msg('stop', { fromMe: true }))).toBe(false)
     expect(await t.handler.handle(t.msg('stop', { chatId: 'status@broadcast' }))).toBe(false)
-    expect(await t.handler.handle(t.msg('stop', { timestamp: t.clock.now() - 10 * 60_000 }))).toBe(false)
     expect(await t.handler.handle(t.msg(null))).toBe(false)
     expect(t.store.listSuppressed()).toEqual([])
     expect(t.replies).toEqual([])
+  })
+})
+
+describe('OptOutHandler: old messages and identities', () => {
+  it('records a STOP that arrived while the app was offline, without sending a late confirmation', async () => {
+    const t = setup()
+    const old = t.clock.now() - 6 * 3_600_000
+    expect(await t.handler.handle(t.msg('stop', { timestamp: old }))).toBe(true)
+    expect(t.store.isSuppressed({ number: NUM })?.reason).toBe('berhenti')
+    expect(t.replies).toEqual([])
+    expect(t.signals).toEqual(['optout'])
+  })
+  it('an old complaint is recorded too', async () => {
+    const t = setup()
+    await t.handler.handle(t.msg('ini spam', { timestamp: t.clock.now() - 6 * 3_600_000 }))
+    expect(t.store.isSuppressed({ number: NUM })?.reason).toBe('laporan')
+  })
+  it('a lid chat is resolved to the phone number WhatsApp reports, so the person is blocked under both', async () => {
+    const t = setup()
+    t.store.upsertContact({ number: NUM, jid: JID, source: 'chat', status: 'aktif' })
+    expect(await t.handler.handle(t.msg('BERHENTI', { chatId: 'abc123@lid', altJid: JID }))).toBe(true)
+    expect(t.store.isSuppressed({ number: NUM })?.reason).toBe('berhenti')
+    expect(t.store.isSuppressed({ jid: 'abc123@lid' })?.reason).toBe('berhenti')
+    expect(t.replies).toEqual([{ chatId: 'abc123@lid', text: STOP_CONFIRMATION }])
+  })
+  it('never downgrades a complaint to an ordinary opt-out, so "mulai" cannot lift it', async () => {
+    const t = setup()
+    await t.handler.handle(t.msg('ini spam'))
+    await t.handler.handle(t.msg('stop'))
+    expect(t.store.isSuppressed({ number: NUM })?.reason).toBe('laporan')
+    await t.handler.handle(t.msg('mulai'))
+    expect(t.store.isSuppressed({ number: NUM })?.reason).toBe('laporan')
+  })
+  it('hands a complaint from a broadcast recipient to a person instead of swallowing it', async () => {
+    const t = setup()
+    await t.handler.handle(t.msg('ini penipuan bukan?'))
+    expect(t.complaints).toEqual(['ini penipuan bukan?'])
   })
 })

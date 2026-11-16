@@ -28,6 +28,7 @@ function setApi(over: Record<string, unknown> = {}) {
     bcResumeCampaign: vi.fn().mockResolvedValue({ ok: true }),
     bcStopCampaign: vi.fn().mockResolvedValue(undefined),
     bcStopAll: vi.fn().mockResolvedValue(undefined),
+    bcDiscardDraft: vi.fn().mockResolvedValue({ ok: true }),
     bcReport: vi.fn().mockResolvedValue({ campaign: camp(), progress, skippedReasons: { tolak: 2 }, optOuts: 1 }),
     bcExportReport: vi.fn().mockResolvedValue('nomor,nama\n6281,Budi'),
     bcOverview: vi.fn(), bcGetSafety: vi.fn().mockResolvedValue(safety), bcContacts: vi.fn().mockResolvedValue([]), bcSuppressed: vi.fn().mockResolvedValue([]),
@@ -187,6 +188,35 @@ describe('Campaign wizard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Lanjut' }))
     fireEvent.click(screen.getByRole('button', { name: 'Mulai kampanye' }))
     expect((await screen.findByRole('alert')).textContent).toMatch(/pengaturan keamanan/i)
+  })
+})
+
+describe('Campaign wizard: no orphan drafts', () => {
+  async function toReview() {
+    fireEvent.click(await screen.findByRole('button', { name: 'Buat kampanye' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Lanjut' }))
+    fireEvent.change(screen.getByLabelText('Nama kampanye'), { target: { value: 'Promo' } })
+    fireEvent.change(screen.getByLabelText('Isi pesan'), { target: { value: 'Halo {nama}, ini {bisnis}.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lanjut' }))
+    await screen.findByText('12 penerima layak')
+  }
+  it('going back and continuing again discards the first draft before creating the next', async () => {
+    const api = setApi()
+    await open()
+    await toReview()
+    fireEvent.click(screen.getByRole('button', { name: 'Kembali' }))
+    fireEvent.change(screen.getByLabelText('Isi pesan'), { target: { value: 'Halo {nama}, ini {bisnis}, versi baru.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lanjut' }))
+    await waitFor(() => expect(api.bcCreateCampaign).toHaveBeenCalledTimes(2))
+    expect(api.bcDiscardDraft).toHaveBeenCalledWith(7)
+    expect(api.bcDiscardDraft.mock.invocationCallOrder[0]).toBeLessThan(api.bcCreateCampaign.mock.invocationCallOrder[1])
+  })
+  it('cancelling the wizard discards the draft it made', async () => {
+    const api = setApi()
+    await open()
+    await toReview()
+    fireEvent.click(screen.getByRole('button', { name: 'Batal' }))
+    await waitFor(() => expect(api.bcDiscardDraft).toHaveBeenCalledWith(7))
   })
 })
 

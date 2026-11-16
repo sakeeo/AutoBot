@@ -138,7 +138,8 @@ function boot(): void {
     wasBroadcastTo: (k) => bstore.wasSentTo(k),
     reply: (chatId, text) => pipeline.reply(chatId, text),
     isHumanHandling: (chatId) => conv.getState(chatId).status === 'manusia',
-    onSignal: (k) => engine.onSignal(k)
+    onSignal: (k) => engine.onSignal(k),
+    onComplaint: (m) => pipeline.emit('escalate', m)
   })
   const pipeline = new ReplyPipeline({
     gateway, store, settings, db,
@@ -156,6 +157,7 @@ function boot(): void {
   engine = new BroadcastEngine({
     store: bstore, gateway, feed, conv, clock, rand: Math.random,
     isBusy: () => pipeline.busy(),
+    send: (jid, text, typingMs) => pipeline.sendBroadcast(jid, text, typingMs),
     connected: () => status.state === 'connected',
     settings: () => loadSafety(bstore, Date.now()),
     businessName: () => brandStore.getActive().identity.businessName.trim() || 'kami'
@@ -229,7 +231,7 @@ function boot(): void {
   engine.startTimer()
   protectNumbers()
   const syncAudience = (): void => {
-    try { syncChatContacts(db, bstore, Date.now()) } catch (err) { logger.warn({ err }, 'broadcast audience sync failed') }
+    try { syncChatContacts(db, bstore, Date.now()); bstore.expirePending(Date.now()) } catch (err) { logger.warn({ err }, 'broadcast audience sync failed') }
   }
   syncAudience()
   setInterval(syncAudience, 10 * 60_000)

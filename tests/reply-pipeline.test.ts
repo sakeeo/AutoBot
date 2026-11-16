@@ -559,6 +559,13 @@ describe('ReplyPipeline opt-out handling', () => {
     expect(t.bstore.isSuppressed({ jid: '6281@s.whatsapp.net' })?.reason).toBe('berhenti')
     expect(t.gateway.sent).toHaveLength(0)
   })
+  it('a STOP that was waiting while the app was closed is still recorded', async () => {
+    const t = withOptOut(true)
+    const r = await t.pipeline.handle(t.msg({ text: 'BERHENTI', timestamp: t.clock.now() - 6 * 3_600_000 }))
+    expect(r).toEqual({ kind: 'ignored', why: 'opt_out' })
+    expect(t.bstore.isSuppressed({ jid: '6281@s.whatsapp.net' })?.reason).toBe('berhenti')
+    expect(t.gateway.sent).toHaveLength(0)
+  })
   it('ordinary questions are unaffected', async () => {
     const t = withOptOut(true)
     expect(await t.pipeline.handle(t.msg())).toMatchObject({ kind: 'replied', via: 'extractive' })
@@ -578,3 +585,24 @@ describe('ReplyPipeline.busy', () => {
   })
 })
 
+describe('ReplyPipeline.sendBroadcast', () => {
+  it('does not mistake the echo of a broadcast for a human taking over', async () => {
+    const t = setup()
+    t.gateway.onSend = async () => { await t.pipeline.handle(t.msg({ fromMe: true, id: 'm-1', text: 'echo' })) }
+    const id = await t.pipeline.sendBroadcast('6281@s.whatsapp.net', 'Halo dari kami', 0)
+    expect(id).toBe('m-1')
+    expect(t.conv.getState('6281@s.whatsapp.net').status).not.toBe('manusia')
+    expect(t.conv.isSentId('m-1')).toBe(true)
+  })
+  it('still notices a real human typing while the broadcast is going out', async () => {
+    const t = setup()
+    t.gateway.onSend = async () => { await t.pipeline.handle(t.msg({ fromMe: true, id: 'HUMAN-5', text: 'saya admin' })) }
+    await t.pipeline.sendBroadcast('6281@s.whatsapp.net', 'Halo dari kami', 0)
+    expect(t.conv.getState('6281@s.whatsapp.net').status).toBe('manusia')
+  })
+  it('does not start a customer-reply cooldown, so a quick answer to a broadcast is not ignored', async () => {
+    const t = setup()
+    await t.pipeline.sendBroadcast('6281@s.whatsapp.net', 'Halo dari kami', 0)
+    expect(t.db.prepare('SELECT COUNT(*) AS n FROM cooldowns').get()).toEqual({ n: 0 })
+  })
+})

@@ -44,6 +44,20 @@ describe('parseImport', () => {
     const p = parseImport({ name: 'daftar.xlsx', data: new Uint8Array(data) })
     expect(p.valid.map((v) => v.number)).toEqual(['6281234567890', '6281298765432'])
   })
+  it('reads numeric XLSX phone cells exactly, instead of turning them into exponent text', () => {
+    const ws = XLSX.utils.aoa_to_sheet([['nomor', 'nama'], [6281234567890, 'Budi'], [81298765432, 'Sari']])
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1')
+    const data = XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer
+    const p = parseImport({ name: 'daftar.xlsx', data: new Uint8Array(data) })
+    expect(p.valid.map((v) => v.number)).toEqual(['6281234567890', '6281298765432'])
+  })
+  it('refuses a number that a spreadsheet already mangled into exponent notation', () => {
+    const p = parseImport(csv(['nomor,nama', '6.28123E+12,Rusak', '081234567890,Budi']))
+    expect(p.valid.map((v) => v.number)).toEqual(['6281234567890'])
+    expect(p.invalid).toHaveLength(1)
+    expect(p.invalid[0].reason).toMatch(/tidak valid/i)
+  })
   it('rejects a file with more than 20,000 rows', () => {
     expect(MAX_IMPORT_ROWS).toBe(20_000)
     const rows = ['nomor', ...Array.from({ length: MAX_IMPORT_ROWS + 1 }, (_, i) => `08123${String(i).padStart(8, '0')}`)]

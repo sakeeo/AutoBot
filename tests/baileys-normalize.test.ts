@@ -92,3 +92,14 @@ describe('account helpers', () => {
     expect(jidForNumber('+62 812 3456 7890')).toBe('6281234567890@s.whatsapp.net')
   })
 })
+
+describe('normalizeMessage alternate (phone) jid', () => {
+  const base = { key: { id: 'A1', remoteJid: 'abc123@lid' }, message: { conversation: 'stop' }, messageTimestamp: 1_700_000_000 }
+  it('keeps the phone jid WhatsApp reports next to a lid chat', () => {
+    expect(normalizeMessage({ ...base, key: { ...base.key, remoteJidAlt: '628111111111@s.whatsapp.net' } })?.altJid).toBe('628111111111@s.whatsapp.net')
+    expect(normalizeMessage({ ...base, key: { ...base.key, senderPn: '628222222222@s.whatsapp.net' } })?.altJid).toBe('628222222222@s.whatsapp.net')
+  })
+  it('has no alternate jid when WhatsApp gives none', () => {
+    expect(normalizeMessage(base)?.altJid).toBeUndefined()
+  })
+})

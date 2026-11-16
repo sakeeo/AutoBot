@@ -13,27 +13,32 @@ export interface OptOutDeps {
   reply(chatId: string, text: string): Promise<void>
   isHumanHandling(chatId: string): boolean
   onSignal(kind: 'optout' | 'complaint' | 'reply'): void
+  /** A complaint from a recipient: a person should look at it, the bot does not answer. */
+  onComplaint?(m: IncomingMessage): void
 }
 
 /**
  * Runs before the agent. Returns true when the message was dealt with and must not reach the agent.
- * Someone never broadcast to who types "stop" is only noted (soft suppression); the bot still answers normally.
+ * Opt-outs count however old the message is (it may have waited while the app was closed); only the automatic
+ * reply is skipped for an old message. Someone never broadcast to who types "stop" is only noted (soft
+ * suppression); the bot still answers normally.
  */
 export class OptOutHandler {
   constructor(private d: OptOutDeps) {}
 
   async handle(m: IncomingMessage): Promise<boolean> {
     if (m.isGroup || m.fromMe || m.chatId.endsWith('@broadcast') || m.text === null) return false
-    if (this.d.clock.now() - m.timestamp > STALE_MS) return false
+    const fresh = this.d.clock.now() - m.timestamp <= STALE_MS
     const { store } = this.d
-    const key: Key = { jid: m.chatId, number: numberFromJid(m.chatId) }
+    // A lid chat has no phone number of its own; use the one WhatsApp reports so both identities are covered.
+    const key: Key = { jid: m.chatId, number: numberFromJid(m.chatId) ?? (m.altJid ? numberFromJid(m.altJid) : null) }
     const was = this.d.wasBroadcastTo(key)
     const kind = classifyReply(m.text)
 
     if (kind === 'start') {
       if (store.isSuppressed(key)?.reason !== 'berhenti') return false
-      store.unsuppress(key)
-      await this.d.reply(m.chatId, START_CONFIRMATION)
+      store.unsuppress(key, 'berhenti')
+      if (fresh) await this.d.reply(m.chatId, START_CONFIRMATION)
       return true
     }
 
@@ -46,7 +51,7 @@ export class OptOutHandler {
       store.suppress({ ...key, reason: 'berhenti' })
       if (!already) {
         this.d.onSignal('optout')
-        if (!this.d.isHumanHandling(m.chatId)) await this.d.reply(m.chatId, STOP_CONFIRMATION)
+        if (fresh && !this.d.isHumanHandling(m.chatId)) await this.d.reply(m.chatId, STOP_CONFIRMATION)
       }
       return true
     }
@@ -55,6 +60,7 @@ export class OptOutHandler {
       store.suppress({ ...key, reason: 'laporan' })
       if (!was) return false
       this.d.onSignal('complaint')
+      this.d.onComplaint?.(m)
       return true
     }
 

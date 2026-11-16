@@ -43,6 +43,7 @@ export const CHANNELS = {
   bcPauseCampaign: 'bc:pause-campaign',
   bcResumeCampaign: 'bc:resume-campaign',
   bcStopCampaign: 'bc:stop-campaign',
+  bcDiscardDraft: 'bc:discard-draft',
   bcStopAll: 'bc:stop-all',
   bcGetSafety: 'bc:get-safety',
   bcSetSafety: 'bc:set-safety',

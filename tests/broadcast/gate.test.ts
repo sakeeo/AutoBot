@@ -13,7 +13,7 @@ const contact = (o: Partial<BContact> = {}): BContact => ({
 })
 const ctx = (o: Partial<GateContext> = {}): GateContext => ({
   now: NOW, connected: true, globalEnabled: true, busy: false, tier: 'mapan', window: W, activeDay: 30,
-  counters: { sentToday: 0, sentThisHour: 0, newToday: 0, sinceBatchPause: 0, lastSentAt: null, batchPausedUntil: null },
+  counters: { sentToday: 0, sentThisHour: 0, sentLast24h: 0, newToday: 0, sinceBatchPause: 0, lastSentAt: null, batchPausedUntil: null },
   kind: 'broadcast', minGapDays: 7, isSuppressed: () => false,
   contactHistory: { lastSentAt: null, sentLast30d: 0, neverSent: false },
   ...o
@@ -41,7 +41,8 @@ describe('checkSend: who may receive', () => {
   it('only a confirmation campaign may message a contact who has not confirmed yet', () => {
     const pending = contact({ status: 'menunggu_persetujuan', source: 'impor' })
     expect(checkSend(pending, ctx())).toEqual({ kind: 'skip', reason: 'menunggu_persetujuan' })
-    expect(checkSend(pending, ctx({ kind: 'konfirmasi' }))).toEqual({ kind: 'allow' })
+    const fresh = { lastSentAt: null, sentLast30d: 0, neverSent: true }
+    expect(checkSend(pending, ctx({ kind: 'konfirmasi', contactHistory: fresh }))).toEqual({ kind: 'allow' })
   })
   it('skips a contact whose number is unknown', () => {
     expect(checkSend(contact({ number: null, jid: 'abc@lid' }), ctx())).toEqual({ kind: 'skip', reason: 'nomor_tidak_diketahui' })
@@ -114,5 +115,26 @@ describe('checkSend: wait times are always in the future', () => {
       expect(d.kind).toBe('wait')
       expect((d as { until: number }).until).toBeGreaterThan((c.now ?? NOW))
     }
+  })
+})
+
+describe('checkSend: spacing, rolling day and confirmations', () => {
+  it('keeps at least 20 seconds between any two sends, even right after a restart', () => {
+    const d = checkSend(contact(), ctx({ counters: counters({ lastSentAt: NOW - 10_000 }) }))
+    expect(d).toMatchObject({ kind: 'wait', until: NOW + 10_000 })
+    expect(checkSend(contact(), ctx({ counters: counters({ lastSentAt: NOW - 20_000 }) })).kind).toBe('allow')
+  })
+  it('a rolling 24-hour count backs up the daily cap, so moving the time zone cannot buy extra sends', () => {
+    const base = ctx({ tier: 'baru', activeDay: 30 })
+    expect(checkSend(contact(), { ...base, counters: counters({ sentToday: 0, sentLast24h: 20 }) }).kind).toBe('wait')
+    expect(checkSend(contact(), { ...base, counters: counters({ sentToday: 0, sentLast24h: 19 }) }).kind).toBe('allow')
+  })
+  it('a confirmation goes only to someone still waiting who was never messaged', () => {
+    const fresh = { lastSentAt: null, sentLast30d: 0, neverSent: true }
+    const messaged = { lastSentAt: NOW - 30 * DAY, sentLast30d: 0, neverSent: false }
+    const pending = contact({ status: 'menunggu_persetujuan', source: 'impor' })
+    expect(checkSend(contact(), ctx({ kind: 'konfirmasi', contactHistory: fresh }))).toEqual({ kind: 'skip', reason: 'sudah_dikonfirmasi' })
+    expect(checkSend(pending, ctx({ kind: 'konfirmasi', contactHistory: messaged }))).toEqual({ kind: 'skip', reason: 'sudah_dikonfirmasi' })
+    expect(checkSend(pending, ctx({ kind: 'konfirmasi', contactHistory: fresh }))).toEqual({ kind: 'allow' })
   })
 })

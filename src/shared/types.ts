@@ -23,6 +23,8 @@ export interface IncomingMessage {
   fromMe: boolean
   text: string | null
   timestamp: number
+  /** For a lid chat: the phone jid WhatsApp reports for the same person, when it does. */
+  altJid?: string
 }
 
 export type ConnStatus = {

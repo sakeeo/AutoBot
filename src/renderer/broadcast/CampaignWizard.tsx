@@ -37,6 +37,8 @@ export function CampaignWizard({ onDone, onClose }: { onDone(): void; onClose():
     setBusy(true)
     setErrors([])
     try {
+      // Going back and continuing again must not leave the first draft behind.
+      if (campaign) { await window.api.bcDiscardDraft(campaign.id).catch(() => undefined); setCampaign(null) }
       const r = await window.api.bcCreateCampaign({ name: name.trim(), template, audience })
       if (!r.ok) { setErrors(r.errors); setWarnings(r.warnings); return }
       setCampaign(r.campaign)
@@ -66,10 +68,15 @@ export function CampaignWizard({ onDone, onClose }: { onDone(): void; onClose():
     }
   }
 
+  async function cancel(): Promise<void> {
+    if (campaign) await window.api.bcDiscardDraft(campaign.id).catch(() => undefined)
+    onClose()
+  }
+
   const big = (preview?.eligible ?? 0) > BIG
   return (
     <Card title={`Kampanye baru · langkah ${step} dari 4`} className="mb-3"
-      actions={<button type="button" className="btn btn-sm btn-outline-secondary" onClick={onClose}>Batal</button>}>
+      actions={<button type="button" className="btn btn-sm btn-outline-secondary" onClick={cancel}>Batal</button>}>
       {step === 1 && (
         <>
           <fieldset className="mb-3">

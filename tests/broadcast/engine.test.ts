@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { openDb } from '../../src/main/db'
 import { BroadcastStore } from '../../src/main/broadcast/store'
 import { BroadcastEngine, type SafetySettings } from '../../src/main/broadcast/engine'
@@ -15,6 +15,7 @@ const at = (h: number, m = 0, day = 16) => Date.UTC(2026, 10, day, h - 8, m) // 
 class Gw implements WaGateway {
   sent: { chatId: string; text: string; typingMs?: number }[] = []
   fail = false
+  hold: Promise<void> | null = null
   onMessage(): void {}
   onStatus(): void {}
   async connect(): Promise<void> {}
@@ -23,6 +24,7 @@ class Gw implements WaGateway {
   jidFor(n: string): string { return `${n}@s.whatsapp.net` }
   async onWhatsApp(ns: string[]) { return ns.map((number) => ({ number, jid: `${number}@s.whatsapp.net`, exists: true })) }
   async sendText(chatId: string, text: string, opts?: { typingMs?: number }): Promise<string | null> {
+    if (this.hold) await this.hold
     if (this.fail) throw new Error('send failed')
     this.sent.push({ chatId, text, typingMs: opts?.typingMs })
     return `W${this.sent.length}`
@@ -179,7 +181,8 @@ describe('BroadcastEngine: daily limits and the send window', () => {
     await t.run(10 * 60_000, 5000, engine2)
     expect(t.gateway.sent).toHaveLength(10)
 
-    t.clock.t = at(9, 0, 17)
+    // The rolling 24 h count also applies, so the next day only opens once the first day's sends are 24 h old.
+    t.clock.t = at(13, 0, 17)
     await t.run(15 * 60_000, 5000, engine2)
     expect(t.gateway.sent).toHaveLength(22) // day 2 warm-up cap is 12
   }, 20_000)
@@ -324,5 +327,153 @@ describe('BroadcastEngine.preview', () => {
     expect(p.eligible).toBe(24)
     expect(p.skipped).toEqual({ tolak: 1, nomor_tidak_diketahui: 1 })
     expect(p.estimatedDays).toBeGreaterThanOrEqual(5) // a new number: 5 first-time contacts a day
+  })
+})
+
+describe('BroadcastEngine: resuming, stopping and surviving mistakes', () => {
+  it('resuming after a safety stop is not tripped again by the old problem, but a new one still stops it', async () => {
+    const t = setup()
+    t.people(6)
+    const c = t.campaign()
+    t.engine.start(c.id)
+    await t.engine.tick()
+    t.engine.onSignal('complaint')
+    expect(t.store.getCampaign(c.id)!.status).toBe('dijeda')
+    t.clock.t += 1000
+    t.engine.start(c.id)
+    await t.run(90_000)
+    expect(t.store.getCampaign(c.id)!.status).toBe('berjalan')
+    expect(t.gateway.sent.length).toBeGreaterThanOrEqual(2)
+    t.engine.onSignal('complaint')
+    expect(t.store.getCampaign(c.id)!.status).toBe('dijeda')
+  })
+  it('after three failures and a resume the old failures are forgotten', async () => {
+    const t = setup()
+    t.people(8)
+    const c = t.campaign()
+    t.gateway.fail = true
+    t.engine.start(c.id)
+    await t.run(5 * 60_000, 5000)
+    expect(t.store.getCampaign(c.id)!.status).toBe('dijeda')
+    t.gateway.fail = false
+    t.clock.t += 1000
+    t.engine.start(c.id)
+    await t.run(90_000)
+    expect(t.gateway.sent.length).toBeGreaterThanOrEqual(2)
+    expect(['berjalan', 'selesai']).toContain(t.store.getCampaign(c.id)!.status)
+  })
+  it('stopping while a message is in flight leaves the campaign stopped, and pause cannot revive it', async () => {
+    const t = setup()
+    t.people(2)
+    const c = t.campaign()
+    t.engine.start(c.id)
+    let release!: () => void
+    t.gateway.hold = new Promise<void>((r) => { release = r })
+    const ticking = t.engine.tick()
+    await new Promise((r) => setTimeout(r, 0))
+    t.engine.stop(c.id)
+    release()
+    await ticking
+    expect(t.store.getCampaign(c.id)!.status).toBe('dihentikan')
+    t.engine.pause(c.id)
+    expect(t.store.getCampaign(c.id)!.status).toBe('dihentikan')
+  })
+  it('marks a send as in flight before sending, so it can never be sent twice', async () => {
+    const t = setup()
+    t.people(1)
+    t.engine.start(t.campaign().id)
+    let release!: () => void
+    t.gateway.hold = new Promise<void>((r) => { release = r })
+    const ticking = t.engine.tick()
+    await new Promise((r) => setTimeout(r, 0))
+    expect(t.db.prepare("SELECT COUNT(*) AS n FROM broadcast_sends WHERE status = 'antre' AND reason = 'mengirim'").get()).toEqual({ n: 1 })
+    release()
+    await ticking
+  })
+  it('a database error after a successful send never causes a second send, and a restart counts it as sent', async () => {
+    const t = setup()
+    t.people(2)
+    const c = t.campaign()
+    t.engine.start(c.id)
+    const spy = vi.spyOn(t.store, 'recordSend').mockImplementationOnce(() => { throw new Error('db down') })
+    await t.engine.tick()
+    spy.mockRestore()
+    expect(t.gateway.sent).toHaveLength(1)
+    await t.run(120_000)
+    expect(t.gateway.sent).toHaveLength(2)
+    expect(new Set(t.gateway.sent.map((s) => s.chatId)).size).toBe(2)
+    t.engine.resetAfterRestart()
+    expect(t.db.prepare("SELECT COUNT(*) AS n FROM broadcast_sends WHERE reason = 'tidak_pasti' AND status = 'terkirim'").get()).toEqual({ n: 1 })
+  })
+  it('keeps the batch pause and the 20-second gap across a restart', async () => {
+    const t = setup()
+    t.warmedUp(4)
+    t.people(14)
+    const c = t.campaign()
+    t.engine.start(c.id)
+    await t.run(260_000)
+    expect(t.gateway.sent).toHaveLength(10)
+    const engine2 = new BroadcastEngine({
+      store: new BroadcastStore(t.db, t.clock), gateway: t.gateway, feed: t.feed, conv: t.conv, clock: t.clock, rand: () => 0,
+      isBusy: () => false, connected: () => true, settings: () => t.settings, businessName: () => 'Kopi Sudut'
+    })
+    engine2.resetAfterRestart()
+    engine2.start(c.id)
+    await t.run(60_000, 2000, engine2)
+    expect(t.gateway.sent).toHaveLength(10)
+  })
+  it('does not send twice within 20 seconds after a restart', async () => {
+    const t = setup()
+    t.people(3)
+    const c = t.campaign()
+    t.engine.start(c.id)
+    await t.engine.tick()
+    const engine2 = new BroadcastEngine({
+      store: new BroadcastStore(t.db, t.clock), gateway: t.gateway, feed: t.feed, conv: t.conv, clock: t.clock, rand: () => 0,
+      isBusy: () => false, connected: () => true, settings: () => t.settings, businessName: () => 'Kopi Sudut'
+    })
+    engine2.resetAfterRestart()
+    engine2.start(c.id)
+    await engine2.tick()
+    expect(t.gateway.sent).toHaveLength(1)
+    t.clock.t += 20_000
+    await engine2.tick()
+    expect(t.gateway.sent).toHaveLength(2)
+  })
+  it('freezes the audience when a campaign is confirmed, even if it waits in the queue', () => {
+    const t = setup()
+    t.people(2)
+    const a = t.campaign(); const b = t.campaign()
+    t.engine.start(a.id)
+    t.engine.start(b.id)
+    expect(t.store.getCampaign(b.id)!.status).toBe('terjadwal')
+    expect(t.store.sendCount(b.id)).toBe(2)
+    t.people(5)
+    expect(t.store.sendCount(b.id)).toBe(2)
+  })
+  it('a confirmation is skipped if the person confirmed in the meantime', async () => {
+    const t = setup()
+    const [p] = t.people(1, { source: 'impor', status: 'menunggu_persetujuan' })
+    const c = t.campaign({ kind: 'konfirmasi', audience: 'impor' })
+    t.engine.start(c.id)
+    t.store.recordInbound({ number: p.number }, t.clock.now())
+    await t.run(10_000)
+    expect(t.gateway.sent).toHaveLength(0)
+    expect(t.db.prepare("SELECT reason FROM broadcast_sends WHERE status = 'dilewati'").all()).toEqual([{ reason: 'sudah_dikonfirmasi' }])
+  })
+  it('sends through the injected sender when there is one (so the pipeline can track the echo)', async () => {
+    const t = setup()
+    t.people(1)
+    const seen: string[] = []
+    const engine = new BroadcastEngine({
+      store: t.store, gateway: t.gateway, feed: t.feed, conv: t.conv, clock: t.clock, rand: () => 0,
+      isBusy: () => false, connected: () => true, settings: () => t.settings, businessName: () => 'Kopi Sudut',
+      send: async (jid, text) => { seen.push(jid); return 'X1' }
+    })
+    engine.start(t.campaign().id)
+    await engine.tick()
+    expect(seen).toHaveLength(1)
+    expect(t.gateway.sent).toHaveLength(0)
+    expect(t.conv.isSentId('X1')).toBe(true)
   })
 })

@@ -17,6 +17,11 @@ const toContact = (r: Row): BContact => ({
 
 export interface Key { number?: string | null; jid?: string | null }
 
+/** A stronger reason is never replaced by a weaker one (a complaint stays a complaint after a later "stop"). */
+const STRENGTH: Record<SuppressReason, number> = {
+  tolak_lunak: 1, tidak_terdaftar: 2, berhenti: 3, blokir_manual: 4, laporan: 4, admin: 5
+}
+
 /** Contacts, the suppression list and (later) campaigns for broadcast. Numbers are always stored normalised. */
 export class BroadcastStore {
   constructor(private db: Db, private clock: { now(): number }) {}
@@ -113,7 +118,9 @@ export class BroadcastStore {
     const jidHash = jid ? hashNumber(jid, salt) : null
     const found = this.matchingRows(number, jid, hash, jidHash)
     if (found.length > 0) {
-      this.db.prepare('UPDATE broadcast_suppress SET reason = ? WHERE id = ?').run(e.reason, found[0])
+      const old = this.db.prepare('SELECT reason FROM broadcast_suppress WHERE id = ?').get(found[0]) as { reason: SuppressReason }
+      if (STRENGTH[e.reason] > STRENGTH[old.reason])
+        this.db.prepare('UPDATE broadcast_suppress SET reason = ? WHERE id = ?').run(e.reason, found[0])
       return
     }
     this.db
@@ -142,11 +149,17 @@ export class BroadcastStore {
     return { reason: r.reason }
   }
 
-  unsuppress(key: Key): void {
+  /** With `onlyReason`, only entries of that reason are lifted (a person can lift their own opt-out, nothing else). */
+  unsuppress(key: Key, onlyReason?: SuppressReason): void {
     const { number, jid } = this.ids(key)
     const salt = this.salt()
-    for (const id of this.matchingRows(number, jid, number ? hashNumber(number, salt) : null, jid ? hashNumber(jid, salt) : null))
+    for (const id of this.matchingRows(number, jid, number ? hashNumber(number, salt) : null, jid ? hashNumber(jid, salt) : null)) {
+      if (onlyReason) {
+        const r = this.db.prepare('SELECT reason FROM broadcast_suppress WHERE id = ?').get(id) as { reason: SuppressReason }
+        if (r.reason !== onlyReason) continue
+      }
       this.db.prepare('DELETE FROM broadcast_suppress WHERE id = ?').run(id)
+    }
   }
 
   listSuppressed(): { number: string | null; jid: string | null; reason: SuppressReason; at: number }[] {
@@ -165,12 +178,13 @@ export class BroadcastStore {
     const salt = this.salt()
     const jid = c.jid ?? (c.number ? `${c.number}@s.whatsapp.net` : null)
     this.db.transaction(() => {
-      this.db.prepare('DELETE FROM broadcast_sends WHERE contact_id = ?').run(id)
+      // What was already sent stays in the rows (anonymised) so the daily limits cannot be reset by erasing people.
+      this.db.prepare("DELETE FROM broadcast_sends WHERE contact_id = ? AND status = 'antre'").run(id)
+      this.db.prepare('UPDATE broadcast_sends SET contact_id = 0 WHERE contact_id = ?').run(id)
       this.db.prepare('DELETE FROM broadcast_contacts WHERE id = ?').run(id)
-      if (jid) {
-        this.db.prepare('DELETE FROM messages WHERE chat_id = ?').run(jid)
-        this.db.prepare('DELETE FROM message_log WHERE chat_id = ?').run(jid)
-      }
+      for (const j of new Set([jid, c.jid].filter((x): x is string => !!x)))
+        for (const t of ['messages', 'message_log', 'turns', 'handoffs', 'contacts', 'events', 'cooldowns'])
+          this.db.prepare(`DELETE FROM ${t} WHERE chat_id = ?`).run(j)
       if (was) {
         const ids = this.matchingRows(c.number, c.jid, c.number ? hashNumber(c.number, salt) : null, c.jid ? hashNumber(c.jid, salt) : null)
         for (const rid of ids) this.db.prepare('DELETE FROM broadcast_suppress WHERE id = ?').run(rid)
@@ -273,7 +287,7 @@ export class BroadcastStore {
     const r = this.db
       .prepare(
         `SELECT s.id AS send_id, c.* FROM broadcast_sends s JOIN broadcast_contacts c ON c.id = s.contact_id
-         WHERE s.campaign_id = ? AND s.status = 'antre' ORDER BY s.id LIMIT 1`
+         WHERE s.campaign_id = ? AND s.status = 'antre' AND s.reason IS NULL ORDER BY s.id LIMIT 1`
       )
       .get(campaignId) as (Row & { send_id: number }) | undefined
     return r ? { sendId: r.send_id, contact: toContact(r) } : null
@@ -304,7 +318,7 @@ export class BroadcastStore {
 
   /** Every limit is counted from what was really sent, so a restart cannot reset it. */
   counters(now: number, timezone: string): {
-    sentToday: number; sentThisHour: number; newToday: number; sendDays: string[]; lastSentAt: number | null
+    sentToday: number; sentThisHour: number; sentLast24h: number; newToday: number; sendDays: string[]; lastSentAt: number | null
   } {
     const sent = (this.db.prepare("SELECT sent_at FROM broadcast_sends WHERE status = 'terkirim' ORDER BY sent_at").all() as { sent_at: number }[]).map((r) => r.sent_at)
     const dayStart = startOfLocalDay(now, timezone)
@@ -314,6 +328,7 @@ export class BroadcastStore {
     return {
       sentToday: sent.filter((t) => t >= dayStart).length,
       sentThisHour: sent.filter((t) => t > now - 3_600_000).length,
+      sentLast24h: sent.filter((t) => t > now - 86_400_000).length,
       newToday: firstSends.filter((r) => r.m >= dayStart).length,
       sendDays: [...new Set(sent.map((t) => localDay(t, timezone)))],
       lastSentAt: sent.length ? sent[sent.length - 1] : null
@@ -337,15 +352,56 @@ export class BroadcastStore {
     return !!this.db.prepare("SELECT 1 FROM broadcast_sends WHERE contact_id = ? AND status = 'terkirim' LIMIT 1").get(c.id)
   }
 
-  recentOutcomes(limit: number): Outcome[] {
+  /** Outcomes of the latest sends since `since`, oldest first; `replied` = the person wrote back after that send. */
+  recentOutcomes(limit: number, since = 0): Outcome[] {
     const rows = this.db
       .prepare(
-        `SELECT s.status, COALESCE(s.sent_at, s.created_at) AS at, k.kind AS kind, c.source AS source
+        `SELECT s.status, COALESCE(s.sent_at, s.created_at) AS at, k.kind AS kind, c.source AS source, c.last_inbound_at AS inbound
          FROM broadcast_sends s JOIN broadcast_campaigns k ON k.id = s.campaign_id JOIN broadcast_contacts c ON c.id = s.contact_id
-         WHERE s.status IN ('terkirim', 'gagal') ORDER BY s.id DESC LIMIT ?`
+         WHERE s.status IN ('terkirim', 'gagal') AND COALESCE(s.sent_at, s.created_at) >= ? ORDER BY s.id DESC LIMIT ?`
       )
-      .all(limit) as { status: string; at: number; kind: CampaignKind; source: 'chat' | 'impor' }[]
-    return rows.reverse().map((r) => ({ at: r.at, ok: r.status === 'terkirim', kind: r.kind, toNonChat: r.source === 'impor' }))
+      .all(since, limit) as { status: string; at: number; kind: CampaignKind; source: 'chat' | 'impor'; inbound: number | null }[]
+    return rows.reverse().map((r) => ({
+      at: r.at, ok: r.status === 'terkirim', kind: r.kind, toNonChat: r.source === 'impor', replied: r.inbound !== null && r.inbound >= r.at
+    }))
+  }
+
+  /** Marks the send as in flight: it is never queued again, whatever happens to the app or the database next. */
+  markSending(sendId: number): void {
+    this.db.prepare("UPDATE broadcast_sends SET reason = 'mengirim' WHERE id = ? AND status = 'antre'").run(sendId)
+  }
+
+  /** After a crash: sends that were in flight may or may not have gone out. Count them as sent (safer for the limits). */
+  settleInterrupted(now: number): void {
+    this.db.transaction(() => {
+      this.db
+        .prepare(
+          `UPDATE broadcast_contacts SET last_sent_at = ?, sent_count = sent_count + 1
+           WHERE id IN (SELECT contact_id FROM broadcast_sends WHERE status = 'antre' AND reason = 'mengirim')`
+        )
+        .run(now)
+      this.db.prepare("UPDATE broadcast_sends SET status = 'terkirim', reason = 'tidak_pasti', sent_at = ? WHERE status = 'antre' AND reason = 'mengirim'").run(now)
+    })()
+  }
+
+  /** An imported contact who did not answer the confirmation within 7 days is dropped from the audience. */
+  expirePending(now: number): void {
+    this.db
+      .prepare(
+        `UPDATE broadcast_contacts SET status = 'tidak_aktif' WHERE status = 'menunggu_persetujuan'
+           AND EXISTS (SELECT 1 FROM broadcast_sends s WHERE s.contact_id = broadcast_contacts.id AND s.status = 'terkirim' AND s.sent_at <= ?)`
+      )
+      .run(now - 7 * 86_400_000)
+  }
+
+  deleteDraft(id: number): boolean {
+    const c = this.getCampaign(id)
+    if (!c || c.status !== 'draf') return false
+    this.db.transaction(() => {
+      this.db.prepare('DELETE FROM broadcast_sends WHERE campaign_id = ?').run(id)
+      this.db.prepare('DELETE FROM broadcast_campaigns WHERE id = ?').run(id)
+    })()
+    return true
   }
 
   addEvent(kind: 'optout' | 'complaint', at: number): void {

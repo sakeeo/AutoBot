@@ -31,6 +31,8 @@ export interface EngineDeps {
   rand: () => number
   isBusy(): boolean
   connected(): boolean
+  /** Sends one message and returns its WhatsApp id. The pipeline supplies one that tracks the echo; default is the gateway. */
+  send?(jid: string, text: string, typingMs: number): Promise<string | null>
   settings(): SafetySettings
   businessName(): string
 }
@@ -51,6 +53,16 @@ export class BroadcastEngine extends EventEmitter {
 
   constructor(private d: EngineDeps) {
     super()
+    // The batch pause survives a restart, so closing the app is not a way around it.
+    try {
+      const b = JSON.parse(d.store.getState('batch') ?? '{}') as { since?: number; pausedUntil?: number | null }
+      this.sinceBatch = b.since ?? 0
+      this.batchPausedUntil = b.pausedUntil ?? null
+    } catch { /* start fresh */ }
+  }
+
+  private saveBatch(): void {
+    this.d.store.setState('batch', JSON.stringify({ since: this.sinceBatch, pausedUntil: this.batchPausedUntil }))
   }
 
   // ---- lifecycle ----
@@ -58,6 +70,10 @@ export class BroadcastEngine extends EventEmitter {
   start(id: number): void {
     const c = this.d.store.getCampaign(id)
     if (!c || !['draf', 'terjadwal', 'dijeda'].includes(c.status)) return
+    // The audience is fixed the moment the user confirms, even if the campaign has to wait in the queue.
+    if (this.d.store.sendCount(c.id) === 0) this.d.store.enqueue(c.id)
+    // Resuming is an acknowledgement: only problems after this moment can stop the campaign again.
+    if (c.status === 'dijeda') this.d.store.setState(`resume:${c.id}`, String(this.d.clock.now()))
     const running = this.d.store.runningCampaign()
     if (running && running.id !== id) {
       this.d.store.setCampaignStatus(id, 'terjadwal')
@@ -72,7 +88,9 @@ export class BroadcastEngine extends EventEmitter {
     this.emitProgress(c.id)
   }
 
+  /** Only a running campaign can be paused; a stopped or finished one is never brought back to life. */
   pause(id: number, reason = 'Dijeda oleh pengguna.'): void {
+    if (this.d.store.getCampaign(id)?.status !== 'berjalan') return
     this.d.store.setCampaignStatus(id, 'dijeda', reason)
     this.emit('paused', { campaignId: id, reason })
   }
@@ -90,6 +108,7 @@ export class BroadcastEngine extends EventEmitter {
 
   /** A campaign that was running when the app closed is paused, never silently continued. */
   resetAfterRestart(): void {
+    this.d.store.settleInterrupted(this.d.clock.now())
     const c = this.d.store.runningCampaign()
     if (c) this.pause(c.id, 'Aplikasi dimulai ulang. Periksa lalu lanjutkan.')
   }
@@ -145,6 +164,7 @@ export class BroadcastEngine extends EventEmitter {
     }
     if (now < this.nextAt) return false
 
+    if (this.checkBreaker(c)) return false
     const decision = checkSend(q.contact, this.context(c, q.contact.id, now))
     if (decision.kind === 'halt') {
       this.pause(c.id, decision.reason)
@@ -156,28 +176,38 @@ export class BroadcastEngine extends EventEmitter {
       this.emitProgress(c.id)
       return true
     }
+    // The user may have stopped or paused it while we were deciding.
+    if (store.getCampaign(c.id)?.status !== 'berjalan') return false
 
     const contact = q.contact
     const jid = contact.jid ?? `${contact.number}@s.whatsapp.net`
-    const text = withFooter(
-      renderTemplate(c.template, { ...contact.vars, nama: contact.name, bisnis: this.d.businessName() })
-    )
+    const text = withFooter(renderTemplate(c.template, { ...contact.vars, nama: contact.name, bisnis: this.d.businessName() }))
+    // Marked in flight BEFORE sending: whatever fails afterwards, this message is never sent a second time.
+    store.markSending(q.sendId)
+    const send = this.d.send ?? ((j: string, t: string, typingMs: number) => this.d.gateway.sendText(j, t, { typingMs }))
+    let waId: string | null = null
+    let sent = false
     try {
-      const waId = await this.d.gateway.sendText(jid, text, { typingMs: 2000 + Math.floor(this.d.rand() * 3000) })
+      waId = await send(jid, text, 2000 + Math.floor(this.d.rand() * 3000))
+      sent = true
+    } catch (e) {
+      try { store.recordSend(q.sendId, { status: 'gagal', reason: (e as Error).message, at: clock.now() }) } catch { /* settled on restart */ }
+      this.nextAt = clock.now() + nextDelayMs(this.d.rand)
+    }
+    if (sent) {
       const at = clock.now()
-      store.recordSend(q.sendId, { status: 'terkirim', waId, at })
-      if (waId) this.d.conv.rememberSentId(waId)
-      try { this.d.feed?.recordOutgoing(jid, text, waId) } catch { /* the feed is only a view */ }
+      try { store.recordSend(q.sendId, { status: 'terkirim', waId, at }) } catch { /* left in flight; counted as sent after a restart */ }
+      try {
+        if (waId) this.d.conv.rememberSentId(waId)
+        this.d.feed?.recordOutgoing(jid, text, waId)
+      } catch { /* the feed is only a view */ }
       this.nextAt = at + nextDelayMs(this.d.rand)
       if (++this.sinceBatch >= BATCH_SIZE) {
         this.sinceBatch = 0
         this.batchPausedUntil = at + batchPauseMs(this.d.rand)
         this.nextAt = Math.max(this.nextAt, this.batchPausedUntil)
       }
-    } catch (e) {
-      const at = clock.now()
-      store.recordSend(q.sendId, { status: 'gagal', reason: (e as Error).message, at })
-      this.nextAt = at + nextDelayMs(this.d.rand)
+      try { this.saveBatch() } catch { /* best effort */ }
     }
     this.emitProgress(c.id)
     this.checkBreaker(c)
@@ -198,6 +228,7 @@ export class BroadcastEngine extends EventEmitter {
       counters: {
         sentToday: counters.sentToday,
         sentThisHour: counters.sentThisHour,
+        sentLast24h: counters.sentLast24h,
         newToday: counters.newToday,
         sinceBatchPause: this.sinceBatch,
         lastSentAt: counters.lastSentAt,
@@ -215,20 +246,22 @@ export class BroadcastEngine extends EventEmitter {
     return days.filter((d) => d >= from)
   }
 
-  private checkBreaker(c: Campaign): void {
+  /** True (and the campaign paused) when a warning sign is present. Only signs since the last resume count. */
+  private checkBreaker(c: Campaign): boolean {
     const { store } = this.d
-    const recent = store.recentOutcomes(30)
-    const since = recent.length >= 30 ? recent[0].at : 0
+    const cur = store.getCampaign(c.id)
+    if (!cur || cur.status !== 'berjalan') return false
+    const resumeAt = Number(store.getState(`resume:${c.id}`) ?? 0)
+    const recent = store.recentOutcomes(30, resumeAt)
+    const since = Math.max(recent.length >= 30 ? recent[0].at : 0, resumeAt)
     const r = evaluateBreaker(
       recent,
-      {
-        lastOptOuts: store.eventsSince('optout', since),
-        lastComplaints: store.eventsSince('complaint', since),
-        repliesAmongNonChat: store.repliesFromImported()
-      },
+      { lastOptOuts: store.eventsSince('optout', since), lastComplaints: store.eventsSince('complaint', since) },
       c.kind
     )
-    if (r.trip) this.pause(c.id, r.reason)
+    if (!r.trip) return false
+    this.pause(c.id, r.reason)
+    return true
   }
 
   private emitProgress(campaignId: number): void {

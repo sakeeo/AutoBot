@@ -6,6 +6,10 @@ describe('normalizePhone', () => {
     for (const raw of ['0812-3456-7890', '+62 812 3456 7890', '6281234567890', ' 081234567890 ', '(0812) 3456 7890'])
       expect(normalizePhone(raw), raw).toBe('6281234567890')
   })
+  it('reads an Indonesian mobile number whose leading 0 was dropped (as Excel does)', () => {
+    expect(normalizePhone('81234567890')).toBe('6281234567890')
+    expect(normalizePhone('8123456789')).toBe('628123456789')
+  })
   it('rejects values that are not phone numbers', () => {
     for (const raw of ['', '123', 'abc', '0'.repeat(16), '1234567890123456', '+', '---'])
       expect(normalizePhone(raw), raw).toBeNull()

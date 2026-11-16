@@ -162,6 +162,7 @@ export interface Api {
   bcPauseCampaign(id: number): Promise<void>
   bcResumeCampaign(id: number): Promise<{ ok: true } | { ok: false; error: string }>
   bcStopCampaign(id: number): Promise<void>
+  bcDiscardDraft(id: number): Promise<{ ok: boolean }>
   bcStopAll(): Promise<void>
   bcGetSafety(): Promise<SafetyView>
   bcSetSafety(patch: Record<string, unknown>): Promise<{ ok: true; safety: SafetyView } | { ok: false; error: string }>

@@ -156,9 +156,9 @@ export class ReplyPipeline extends EventEmitter {
     if (m.chatId.endsWith('@broadcast')) return ignored('status')
     if (m.text === null || m.text.trim() === '') return ignored('no_text')
     if (m.isGroup && !s.allowGroups) return ignored('group')
-    if (this.d.clock.now() - m.timestamp > STALE_MS) return ignored('stale')
-    // Opt-outs are recorded even while a human is handling the chat, so this runs before the pause check.
+    // An opt-out counts however old it is and even while a human is handling the chat, so this runs first.
     if (this.d.optOut && (await this.d.optOut.handle(m))) return ignored('opt_out')
+    if (this.d.clock.now() - m.timestamp > STALE_MS) return ignored('stale')
     if (this.d.conv.isPaused(m.chatId)) return ignored('human')
 
     // AI mode: the conversation agent answers. It has no per-contact cooldown (customers send several
@@ -240,6 +240,25 @@ export class ReplyPipeline extends EventEmitter {
     if (action === 'reply') await this.send(m.chatId, replyText)
     else if (action === 'escalate') this.emit('escalate', m)
     return { result: { kind: 'out_of_context', action } as PipelineResult, top, sources: [] as string[] }
+  }
+
+  /**
+   * Sends one broadcast message. Like every other send it is registered as in flight, so its echo from WhatsApp
+   * is not mistaken for a person typing from the phone (which would pause the bot for that customer).
+   * No customer-reply cooldown is started: a quick answer to a broadcast must still be answered.
+   */
+  async sendBroadcast(chatId: string, text: string, typingMs: number): Promise<string | null> {
+    const pending: IncomingMessage[] = []
+    this.inflight.set(chatId, pending)
+    let sentId: string | null = null
+    try {
+      sentId = await this.d.gateway.sendText(chatId, text, { typingMs })
+      if (sentId) this.d.conv.rememberSentId(sentId)
+    } finally {
+      this.inflight.delete(chatId)
+    }
+    for (const p of pending) if (p.id !== sentId) this.takeover(p)
+    return sentId
   }
 
   /** A system reply (e.g. the unsubscribe confirmation): recorded in the feed and never mistaken for a human. */

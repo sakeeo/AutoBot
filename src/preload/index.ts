@@ -51,6 +51,7 @@ const api: Api = {
   bcPauseCampaign: (id) => ipcRenderer.invoke(C.bcPauseCampaign, id),
   bcResumeCampaign: (id) => ipcRenderer.invoke(C.bcResumeCampaign, id),
   bcStopCampaign: (id) => ipcRenderer.invoke(C.bcStopCampaign, id),
+  bcDiscardDraft: (id) => ipcRenderer.invoke(C.bcDiscardDraft, id),
   bcStopAll: () => ipcRenderer.invoke(C.bcStopAll),
   bcGetSafety: () => ipcRenderer.invoke(C.bcGetSafety),
   bcSetSafety: (p) => ipcRenderer.invoke(C.bcSetSafety, p),
