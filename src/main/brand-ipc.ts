@@ -41,6 +41,9 @@ class SilentGateway implements WaGateway {
   async connect(): Promise<void> {}
   async logout(): Promise<void> {}
   selfNumber(): string | null { return this.real.selfNumber() }
+  async onWhatsApp(numbers: string[]): Promise<{ number: string; jid: string | null; exists: boolean }[]> {
+    return numbers.map((number) => ({ number, jid: `${number}@s.whatsapp.net`, exists: true }))
+  }
   jidFor(n: string): string { return this.real.jidFor(n) }
   async sendText(): Promise<string | null> { return null }
 }

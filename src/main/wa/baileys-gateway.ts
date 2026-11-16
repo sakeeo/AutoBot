@@ -83,6 +83,17 @@ export function jidForNumber(number: string): string {
   return `${normalizeNumber(number)}@s.whatsapp.net`
 }
 
+/** Pairs Baileys' results with the numbers we asked about; a number it did not answer for is not registered. */
+export function mapOnWhatsApp(
+  numbers: string[],
+  results: { jid: string; exists: boolean }[]
+): { number: string; jid: string | null; exists: boolean }[] {
+  return numbers.map((number) => {
+    const hit = results.find((r) => r.jid.split('@')[0].split(':')[0] === number)
+    return hit && hit.exists ? { number, jid: hit.jid, exists: true } : { number, jid: null, exists: false }
+  })
+}
+
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
 export class BaileysGateway implements WaGateway {
@@ -159,6 +170,12 @@ export class BaileysGateway implements WaGateway {
 
   jidFor(number: string): string {
     return jidForNumber(number)
+  }
+
+  async onWhatsApp(numbers: string[]): Promise<{ number: string; jid: string | null; exists: boolean }[]> {
+    if (!this.sock) throw new Error('WhatsApp not connected')
+    const results = ((await this.sock.onWhatsApp(...numbers)) ?? []) as { jid: string; exists: boolean }[]
+    return mapOnWhatsApp(numbers, results)
   }
 
   async sendText(chatId: string, text: string, opts: { typingMs?: number } = {}): Promise<string | null> {

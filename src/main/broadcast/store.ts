@@ -19,6 +19,14 @@ export interface Key { number?: string | null; jid?: string | null }
 export class BroadcastStore {
   constructor(private db: Db, private clock: { now(): number }) {}
 
+  createImport(e: { sourceNote: string; total: number; valid: number }): number {
+    const now = this.clock.now()
+    const r = this.db
+      .prepare('INSERT INTO broadcast_imports(source_note, attested_at, total, valid, created_at) VALUES (?, ?, ?, ?, ?)')
+      .run(e.sourceNote, now, e.total, e.valid, now)
+    return Number(r.lastInsertRowid)
+  }
+
   salt(): string {
     const row = this.db.prepare("SELECT v FROM broadcast_state WHERE k = 'salt'").get() as { v: string } | undefined
     if (row) return row.v
