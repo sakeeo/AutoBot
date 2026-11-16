@@ -19,6 +19,7 @@ import { secretNameFor } from '../shared/providers'
 import { registerIpc } from './ipc'
 import { createBrandHandlers } from './brand-ipc'
 import { MessageFeed } from './messages/message-feed'
+import { incomingNotification } from './notify'
 import { AuthStore } from './auth/auth-store'
 import { createAuthHandlers, lockAwareSend, redactWhenLocked, type AuthHandlers } from './auth/auth-ipc'
 import { createTray } from './tray'
@@ -142,7 +143,15 @@ function boot(): void {
     send(C.evtStatus, s)
     tray?.refresh(STATUS_LABEL[s.state])
   })
-  feed.on('message', (m) => send(C.evtMessage, m))
+  feed.on('message', (m) => {
+    send(C.evtMessage, m)
+    const n = incomingNotification(m, { enabled: settings.get().notifyIncoming, locked: isLocked(), now: Date.now() })
+    if (n && Notification.isSupported()) {
+      const note = new Notification(n)
+      note.on('click', showWindow)
+      note.show()
+    }
+  })
   indexer.on('status', (e) => send(C.evtIndexStatus, e))
   pipeline.on('escalate', (m: { chatId: string; text: string | null }) => {
     send(C.evtEscalate, { chatId: m.chatId, text: m.text })

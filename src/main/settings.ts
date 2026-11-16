@@ -16,7 +16,8 @@ export const DEFAULT_SETTINGS: Settings = {
   cooldownSec: 10,
   ai: { provider: 'claude', model: 'claude-haiku-5-5', maxTokens: 400 },
   autoStart: false,
-  theme: 'auto'
+  theme: 'auto',
+  notifyIncoming: true
 }
 
 export class SettingsStore {

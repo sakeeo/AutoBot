@@ -11,6 +11,8 @@ export interface Settings {
   ai: { provider: ProviderId; model: string; maxTokens: number; baseUrl?: string }
   autoStart: boolean
   theme: 'light' | 'dark' | 'auto'
+  /** Desktop notification for every new incoming chat message. */
+  notifyIncoming: boolean
 }
 
 export interface IncomingMessage {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SettingsStore, MemorySecretStore } from '../src/main/settings'
@@ -14,6 +14,15 @@ describe('SettingsStore', () => {
     expect(s.outOfContext.action).toBe('reply')
     expect(s.allowGroups).toBe(false)
     expect(s.theme).toBe('auto')
+    expect(s.notifyIncoming).toBe(true)
+  })
+
+  it('keeps notifications on for a settings file saved before the option existed', () => {
+    const f = tmpFile()
+    writeFileSync(f, JSON.stringify({ threshold: 0.7 }))
+    const s = new SettingsStore(f).get()
+    expect(s.threshold).toBe(0.7)
+    expect(s.notifyIncoming).toBe(true)
   })
 
   it('persists updates across instances', () => {

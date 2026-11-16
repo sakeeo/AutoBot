@@ -9,7 +9,7 @@ import type { Settings } from '../../src/shared/types'
 const base: Settings = {
   knowledgeFolders: ['/data/kb'], excludePatterns: [], mode: 'extractive',
   outOfContext: { action: 'reply', replyText: 'Maaf' }, threshold: 0.6, allowGroups: false, cooldownSec: 10,
-  ai: { provider: 'claude', model: 'claude-haiku-5-5', maxTokens: 400 }, autoStart: false, theme: 'auto'
+  ai: { provider: 'claude', model: 'claude-haiku-5-5', maxTokens: 400 }, autoStart: false, theme: 'auto', notifyIncoming: true
 }
 const zero = { replied: 0, refused: 0, handoff: 0, errors: 0, links: 0 }
 const empty: DashboardData = { today: zero, week: zero, waitingAdmin: 0, recent: [], files: { indexed: 0, failed: 0 } }

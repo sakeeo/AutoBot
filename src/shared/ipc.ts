@@ -30,7 +30,8 @@ export const SettingsPatchSchema = z
       })
       .strict(),
     autoStart: z.boolean(),
-    theme: z.enum(['light', 'dark', 'auto'])
+    theme: z.enum(['light', 'dark', 'auto']),
+    notifyIncoming: z.boolean()
   })
   .partial()
   .strict()

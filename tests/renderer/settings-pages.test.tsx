@@ -12,7 +12,8 @@ import type { Settings } from '../../src/shared/types'
 const settings: Settings = {
   knowledgeFolders: ['/home/u/docs'], excludePatterns: [], mode: 'extractive',
   outOfContext: { action: 'reply', replyText: 'Maaf' }, threshold: 0.6, allowGroups: false, cooldownSec: 10,
-  ai: { provider: 'claude', model: 'claude-haiku-5-5', maxTokens: 400 }, autoStart: false, theme: 'auto'
+  ai: { provider: 'claude', model: 'claude-haiku-5-5', maxTokens: 400 }, autoStart: false, theme: 'auto',
+  notifyIncoming: true
 }
 
 function setApi(over: Record<string, unknown> = {}) {
@@ -123,6 +124,12 @@ describe('SecurityPage', () => {
     await screen.findByRole('region', { name: 'Login aplikasi' })
     expect(screen.getByRole('region', { name: 'Umum' })).toBeTruthy()
     expect(h2s().map((h) => h.textContent?.trim())).toEqual(['Keamanan & Umum'])
+  })
+  it('has a switch for desktop notifications of incoming messages', async () => {
+    const api = setApi()
+    page()
+    fireEvent.click(await screen.findByLabelText('Notifikasi pesan masuk'))
+    await waitFor(() => expect(api.updateSettings).toHaveBeenCalledWith({ notifyIncoming: false }))
   })
   it('disabling login takes two steps and the first never calls the API', async () => {
     const api = setApi()

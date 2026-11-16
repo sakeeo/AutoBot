@@ -85,3 +85,10 @@ describe('ChatIdSchema', () => {
   })
 })
 
+describe('SettingsPatchSchema notifyIncoming', () => {
+  it('accepts a boolean and rejects anything else', () => {
+    expect(SettingsPatchSchema.safeParse({ notifyIncoming: false }).success).toBe(true)
+    expect(SettingsPatchSchema.safeParse({ notifyIncoming: 'ya' }).success).toBe(false)
+  })
+})
+

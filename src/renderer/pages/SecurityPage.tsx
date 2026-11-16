@@ -19,6 +19,12 @@ function GeneralSection() {
           <option value="dark">Gelap</option>
         </select>
       </div>
+      <div className="form-check form-switch mb-3">
+        <input id="notify-incoming" type="checkbox" role="switch" className="form-check-input"
+          checked={settings.notifyIncoming} onChange={(e) => patch({ notifyIncoming: e.target.checked })} />
+        <label htmlFor="notify-incoming" className="form-check-label">Notifikasi pesan masuk</label>
+        <div className="form-text">Menampilkan notifikasi desktop untuk setiap pesan baru. Saat aplikasi terkunci, isinya disamarkan.</div>
+      </div>
       <div className="form-check form-switch">
         <input id="autostart" type="checkbox" role="switch" className="form-check-input"
           checked={settings.autoStart} onChange={(e) => patch({ autoStart: e.target.checked })} />
