@@ -104,6 +104,9 @@ export class ReplyPipeline extends EventEmitter {
     const top = hits[0]?.coverage ?? null
     const decision = decide(m.text, hits, s.threshold)
 
+    // Greetings, thanks and emoji carry no question: never answer them with a refusal.
+    if (decision.kind === 'out_of_context' && decision.reason === 'no_tokens')
+      return { result: { kind: 'out_of_context', action: 'silent' }, top, sources: [] }
     if (decision.kind === 'out_of_context') return this.outOfContext(m, top)
 
     const answered = await this.answer(m.text, decision.hits, s.mode, s.ai)

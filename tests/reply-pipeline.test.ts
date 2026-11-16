@@ -141,6 +141,14 @@ describe('ReplyPipeline out of context', () => {
     expect(seen).toHaveLength(1)
     expect(t.gateway.sent).toHaveLength(0)
   })
+  it('stays silent on pure chatter instead of sending the refusal text', async () => {
+    const t = setup()
+    for (const text of ['oke', 'terima kasih', 'halo', '👍']) {
+      expect(await t.pipeline.handle(t.msg({ text }))).toEqual({ kind: 'out_of_context', action: 'silent' })
+      t.clock.t += 20_000
+    }
+    expect(t.gateway.sent).toHaveLength(0)
+  })
   it('survives FTS special characters', async () => {
     const t = setup()
     const r = await t.pipeline.handle(t.msg({ text: '"; NEAR( * -' }))
