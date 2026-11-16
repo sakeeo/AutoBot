@@ -20,6 +20,10 @@ describe('chunkText', () => {
     const b = chunks[1].split(/\s+/)
     expect(a.slice(-80)).toEqual(b.slice(0, 80))
   })
+  it('preserves line breaks so rows stay separable', () => {
+    const [c] = chunkText('produk: Kopi; harga: 25000\nproduk: Teh; harga: 15000')
+    expect(c.split('\n')).toEqual(['produk: Kopi; harga: 25000', 'produk: Teh; harga: 15000'])
+  })
   it('never returns empty chunks', () => {
     for (const c of chunkText(words(1200))) expect(c.trim().length).toBeGreaterThan(0)
   })
