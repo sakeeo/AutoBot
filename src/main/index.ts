@@ -18,6 +18,8 @@ import { makeProvider } from './answer/make-provider'
 import { secretNameFor } from '../shared/providers'
 import { registerIpc } from './ipc'
 import { createBrandHandlers } from './brand-ipc'
+import { AuthStore } from './auth/auth-store'
+import { createAuthHandlers, type AuthHandlers } from './auth/auth-ipc'
 import { createTray } from './tray'
 import { CHANNELS as C } from '../shared/channels'
 import type { ConnStatus } from '../shared/types'
@@ -25,6 +27,7 @@ import type { ConnStatus } from '../shared/types'
 let win: BrowserWindow | null = null
 let quitting = false
 let trayActive = false
+let authHandlers: AuthHandlers | null = null
 
 function showWindow(): void {
   if (!win || win.isDestroyed()) win = createWindow()
@@ -57,6 +60,8 @@ function createWindow(): BrowserWindow {
       w.hide()
     }
   })
+  // A hidden window (closed to the tray) must be unlocked again; the bot keeps running regardless.
+  w.on('hide', () => authHandlers?.lock())
   w.on('closed', () => { win = null })
   return w
 }
@@ -157,8 +162,11 @@ function boot(): void {
     }
   })
 
+  authHandlers = createAuthHandlers(new AuthStore(join(data, 'auth.json'), clock))
+
   registerIpc({
     brandHandlers,
+    auth: authHandlers,
     gateway, getStatus: () => status, indexer, store, settings, secrets, pipeline, db, makeProvider,
     getWindow: () => win,
     onSettingsChanged: (prev, next) => {

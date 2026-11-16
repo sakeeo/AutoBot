@@ -38,6 +38,14 @@ const api: Api = {
   previewChat: (input) => ipcRenderer.invoke(C.previewChat, input),
   listPresets: () => ipcRenderer.invoke(C.listPresets),
   loadPreset: (id) => ipcRenderer.invoke(C.loadPreset, id),
+  authState: () => ipcRenderer.invoke(C.authState),
+  authLogin: (u, p) => ipcRenderer.invoke(C.authLogin, u, p),
+  authLock: () => ipcRenderer.invoke(C.authLock),
+  authSetup: (u, p) => ipcRenderer.invoke(C.authSetup, u, p),
+  authChangePassword: (o, n) => ipcRenderer.invoke(C.authChangePassword, o, n),
+  authReset: (c, n) => ipcRenderer.invoke(C.authReset, c, n),
+  authDisable: (p) => ipcRenderer.invoke(C.authDisable, p),
+  authSetAutoLock: (m) => ipcRenderer.invoke(C.authSetAutoLock, m),
   onHandoff: subscribe(C.evtHandoff)
 }
 

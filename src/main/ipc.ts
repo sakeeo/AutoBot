@@ -1,4 +1,4 @@
-import { dialog, ipcMain, shell, type BrowserWindow } from 'electron'
+import { dialog, ipcMain, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import type { Db } from './db'
 import type { Indexer } from './knowledge/indexer'
 import type { IndexStore } from './knowledge/index-store'
@@ -11,6 +11,7 @@ import { CHANNELS as C } from '../shared/channels'
 import { ApiKeySchema, LimitSchema, QuestionSchema, SettingsPatchSchema, type LogRow } from '../shared/ipc'
 import { saveApiKey } from './ai-key'
 import type { BrandHandlers } from './brand-ipc'
+import { AUTH_CHANNELS, guardHandler, type AuthHandlers } from './auth/auth-ipc'
 import { PROVIDERS, resolveBaseUrl, secretNameFor } from '../shared/providers'
 
 export interface IpcDeps {
@@ -26,15 +27,19 @@ export interface IpcDeps {
   getWindow(): BrowserWindow | null
   onSettingsChanged(prev: Settings, next: Settings): void
   brandHandlers: BrandHandlers
+  auth: AuthHandlers
 }
 
 export function registerIpc(d: IpcDeps): void {
-  ipcMain.handle(C.getStatus, () => d.getStatus())
-  ipcMain.handle(C.connect, () => d.gateway.connect())
-  ipcMain.handle(C.logout, () => d.gateway.logout())
+  // Every channel goes through the lock gate; only auth:* channels work while locked.
+  const handle = (channel: string, fn: (e: IpcMainInvokeEvent, ...a: any[]) => unknown): void =>
+    ipcMain.handle(channel, guardHandler(d.auth.isLocked, AUTH_CHANNELS.has(channel), fn))
+  handle(C.getStatus, () => d.getStatus())
+  handle(C.connect, () => d.gateway.connect())
+  handle(C.logout, () => d.gateway.logout())
 
-  ipcMain.handle(C.getSettings, () => d.settings.get())
-  ipcMain.handle(C.updateSettings, (_e, raw: unknown) => {
+  handle(C.getSettings, () => d.settings.get())
+  handle(C.updateSettings, (_e, raw: unknown) => {
     const patch = SettingsPatchSchema.parse(raw)
     const prev = d.settings.get()
     const ai = patch.ai ? { ...prev.ai, ...patch.ai } : prev.ai
@@ -47,18 +52,18 @@ export function registerIpc(d: IpcDeps): void {
     return next
   })
 
-  ipcMain.handle(C.pickFolder, async () => {
+  handle(C.pickFolder, async () => {
     const win = d.getWindow()
     const opts = { properties: ['openDirectory' as const] }
     const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
     return r.canceled || r.filePaths.length === 0 ? null : r.filePaths[0]
   })
-  ipcMain.handle(C.listFiles, () => d.store.listFiles())
-  ipcMain.handle(C.reindex, () => d.indexer.reindexAll())
+  handle(C.listFiles, () => d.store.listFiles())
+  handle(C.reindex, () => d.indexer.reindexAll())
 
-  ipcMain.handle(C.testQuestion, (_e, q: unknown) => d.pipeline.preview(QuestionSchema.parse(q)))
+  handle(C.testQuestion, (_e, q: unknown) => d.pipeline.preview(QuestionSchema.parse(q)))
 
-  ipcMain.handle(C.saveApiKey, (_e, key: unknown) => {
+  handle(C.saveApiKey, (_e, key: unknown) => {
     const parsed = ApiKeySchema.safeParse(key)
     if (!parsed.success) return { ok: false, error: 'API key tidak valid.' }
     const ai = d.settings.get().ai
@@ -74,30 +79,30 @@ export function registerIpc(d: IpcDeps): void {
       parsed.data
     )
   })
-  ipcMain.handle(C.hasApiKey, () => d.secrets.has(secretNameFor(d.settings.get().ai.provider)))
-  ipcMain.handle(C.deleteApiKey, () => {
+  handle(C.hasApiKey, () => d.secrets.has(secretNameFor(d.settings.get().ai.provider)))
+  handle(C.deleteApiKey, () => {
     d.secrets.delete(secretNameFor(d.settings.get().ai.provider))
     const prev = d.settings.get()
     if (prev.mode === 'ai') d.onSettingsChanged(prev, d.settings.update({ mode: 'extractive' }))
   })
-  ipcMain.handle(C.openConsole, () => {
+  handle(C.openConsole, () => {
     const url = PROVIDERS[d.settings.get().ai.provider].consoleUrl
     return url ? shell.openExternal(url) : undefined
   })
 
   const b = d.brandHandlers
-  ipcMain.handle(C.getBrand, () => b.getBrand())
-  ipcMain.handle(C.saveBrandDraft, (_e, p: unknown) => b.saveBrandDraft(p))
-  ipcMain.handle(C.applyBrand, () => b.applyBrand())
-  ipcMain.handle(C.listBrandVersions, () => b.listBrandVersions())
-  ipcMain.handle(C.restoreBrandVersion, (_e, v: unknown) => b.restoreBrandVersion(v))
-  ipcMain.handle(C.exportBrand, () => b.exportBrand())
-  ipcMain.handle(C.importBrand, (_e, json: unknown) => b.importBrand(json))
-  ipcMain.handle(C.previewChat, (_e, input: unknown) => b.previewChat(input))
-  ipcMain.handle(C.listPresets, () => b.listPresets())
-  ipcMain.handle(C.loadPreset, (_e, id: unknown) => b.loadPreset(id))
+  handle(C.getBrand, () => b.getBrand())
+  handle(C.saveBrandDraft, (_e, p: unknown) => b.saveBrandDraft(p))
+  handle(C.applyBrand, () => b.applyBrand())
+  handle(C.listBrandVersions, () => b.listBrandVersions())
+  handle(C.restoreBrandVersion, (_e, v: unknown) => b.restoreBrandVersion(v))
+  handle(C.exportBrand, () => b.exportBrand())
+  handle(C.importBrand, (_e, json: unknown) => b.importBrand(json))
+  handle(C.previewChat, (_e, input: unknown) => b.previewChat(input))
+  handle(C.listPresets, () => b.listPresets())
+  handle(C.loadPreset, (_e, id: unknown) => b.loadPreset(id))
 
-  ipcMain.handle(C.getLog, (_e, limit: unknown): LogRow[] =>
+  handle(C.getLog, (_e, limit: unknown): LogRow[] =>
     d.db
       .prepare(
         `SELECT message_id, chat_id, decision, top_score, sources, created_at, text
@@ -105,4 +110,14 @@ export function registerIpc(d: IpcDeps): void {
       )
       .all(LimitSchema.parse(limit)) as LogRow[]
   )
+
+  const a = d.auth
+  handle(C.authState, () => a.authState())
+  handle(C.authLogin, (_e, u: unknown, p: unknown) => a.authLogin(u, p))
+  handle(C.authLock, () => a.authLock())
+  handle(C.authSetup, (_e, u: unknown, p: unknown) => a.authSetup(u, p))
+  handle(C.authChangePassword, (_e, o: unknown, n: unknown) => a.authChangePassword(o, n))
+  handle(C.authReset, (_e, c: unknown, n: unknown) => a.authReset(c, n))
+  handle(C.authDisable, (_e, p: unknown) => a.authDisable(p))
+  handle(C.authSetAutoLock, (_e, m: unknown) => a.authSetAutoLock(m))
 }

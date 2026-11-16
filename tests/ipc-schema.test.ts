@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { CHANNELS, SettingsPatchSchema, ApiKeySchema } from '../src/shared/ipc'
+import { CHANNELS, SettingsPatchSchema, ApiKeySchema, AuthSetupSchema } from '../src/shared/ipc'
 
 describe('SettingsPatchSchema', () => {
   it('accepts a valid partial patch', () => {
@@ -64,5 +64,14 @@ describe('SettingsPatchSchema ai provider', () => {
   it('only accepts http(s) base URLs', () => {
     expect(SettingsPatchSchema.safeParse(ai({ provider: 'custom', baseUrl: 'http://localhost:11434/v1' })).success).toBe(true)
     expect(SettingsPatchSchema.safeParse(ai({ provider: 'custom', baseUrl: 'file:///etc/passwd' })).success).toBe(false)
+  })
+})
+
+describe('AuthSetupSchema', () => {
+  it('requires a username and an 8+ character password and rejects unknown fields', () => {
+    expect(AuthSetupSchema.safeParse({ username: 'admin', password: '12345678' }).success).toBe(true)
+    expect(AuthSetupSchema.safeParse({ username: 'admin', password: '1234567' }).success).toBe(false)
+    expect(AuthSetupSchema.safeParse({ username: '  ', password: '12345678' }).success).toBe(false)
+    expect(AuthSetupSchema.safeParse({ username: 'a', password: '12345678', admin: true }).success).toBe(false)
   })
 })

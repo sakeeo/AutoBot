@@ -35,6 +35,12 @@ export const SettingsPatchSchema = z
   .partial()
   .strict()
 
+export const AuthSetupSchema = z
+  .object({ username: z.string().trim().min(1).max(40), password: z.string().min(8).max(200) })
+  .strict()
+export interface AuthState { enabled: boolean; locked: boolean; username: string | null; autoLockMin: number }
+export type AuthResult = { ok: true } | { ok: false; error: 'bad' | 'throttled' | 'invalid' }
+
 export const ApiKeySchema = z.string().trim().min(10).max(500)
 export const QuestionSchema = z.string().trim().min(1).max(2000)
 export const LimitSchema = z.number().int().min(1).max(500)
@@ -120,5 +126,13 @@ export interface Api {
   previewChat(input: { draft: boolean; messages: string[] }): Promise<PreviewChatResult>
   listPresets(): Promise<{ id: string; label: string }[]>
   loadPreset(id: string): Promise<{ ok: boolean; issues: Issue[]; error?: string }>
+  authState(): Promise<AuthState>
+  authLogin(username: string, password: string): Promise<AuthResult>
+  authLock(): Promise<void>
+  authSetup(username: string, password: string): Promise<{ ok: true; recoveryCode: string } | { ok: false; error: 'invalid' }>
+  authChangePassword(oldPassword: string, newPassword: string): Promise<AuthResult>
+  authReset(recoveryCode: string, newPassword: string): Promise<AuthResult & { recoveryCode?: string }>
+  authDisable(password: string): Promise<AuthResult>
+  authSetAutoLock(min: number): Promise<void>
   onHandoff(cb: (e: { chatId: string; reason: string; summary: string }) => void): () => void
 }
