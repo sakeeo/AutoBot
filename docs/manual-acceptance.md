@@ -81,3 +81,22 @@ memakai pengaturan di tab itu.
 | N10 | Atur kunci otomatis 1 menit, diamkan aplikasi. | Terkunci otomatis setelah ±1 menit tanpa aktivitas; gerak mouse menunda | ☐ |
 | N11 | Nonaktifkan login dengan password. | Aplikasi tidak meminta login lagi | ☐ |
 | N12 | Ganti tema Terang/Gelap di Keamanan & Umum. | Tampilan berubah, bertahan setelah restart (layar login selalu mengikuti tema bawaan sistem) | ☐ |
+
+## Tambahan: Tampilan (Design Guide Rubick)
+
+Acuan tunggal: `docs/design-guide.md`. Mode gelap adalah turunan (panduan hanya memuat palet terang).
+
+| # | Langkah | Hasil yang diharapkan | Lulus |
+|---|---|---|---|
+| U1 | Buka aplikasi di jendela lebar (≥ 992 px). | Sidebar biru 220 px selalu terlihat; top bar putih dengan breadcrumb, badge status WhatsApp, lonceng, menu profil | ☐ |
+| U2 | Pindah ke setiap halaman. | Breadcrumb mengikuti ("Pengaturan / Brand & Konversi"); item sidebar aktif tersorot; judul halaman satu per halaman | ☐ |
+| U3 | Persempit jendela (< 992 px, minimal 860 px). | Sidebar hilang, muncul tombol menu; tombol membuka drawer; Escape, klik latar, atau memilih menu menutupnya dan fokus kembali ke tombol menu; tidak ada scroll horizontal | ☐ |
+| U4 | Kirim pesan yang diserahkan ke admin, lihat lonceng. | Lonceng menampilkan jumlah chat menunggu admin; klik membuka Dashboard | ☐ |
+| U5 | Menu profil → Kunci sekarang (login aktif). | Layar kunci tampil dengan gaya yang sama (kartu, Inter) | ☐ |
+| U6 | Hapus apa pun (tautan, admin, aturan, contoh, pertanyaan, keberatan, folder, key AI), keluar dari WhatsApp, nonaktifkan login, pulihkan versi. | Klik pertama hanya menanyakan "Yakin?"; Batal atau Escape membatalkan; hanya tombol konfirmasi yang menjalankan | ☐ |
+| U7 | Pilih preset lain di Brand & Konversi. | Muncul peringatan konfirmasi dengan "Muat preset" dan "Batal"; tidak memuat sebelum dikonfirmasi | ☐ |
+| U8 | Ganti tema Terang, Gelap, Otomatis di Keamanan & Umum, lalu telusuri semua halaman. | Teks dan badge terbaca di semua halaman, termasuk layar kunci (layar kunci mengikuti tema bawaan sistem setelah mulai ulang) | ☐ |
+| U9 | Tekan Tab di setiap halaman. | Indikator fokus (garis biru) terlihat pada setiap kontrol | ☐ |
+| U10 | Putuskan jaringan atau matikan layanan lalu buka Dashboard dan Log. | Muncul pesan galat dengan tombol "Coba lagi", bukan layar kosong | ☐ |
+| U11 | Jalankan tanpa internet. | Font Inter tetap termuat (dibundel, tanpa CDN) | ☐ |
+

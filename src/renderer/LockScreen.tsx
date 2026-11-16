@@ -46,7 +46,7 @@ export function LockScreen({ onUnlocked }: { onUnlocked(): void }) {
   }
 
   return (
-    <div className="d-flex vh-100 align-items-center justify-content-center bg-body-tertiary">
+    <div className="d-flex vh-100 align-items-center justify-content-center">
       <Card aria-label="Login aplikasi" className="lock-card">
         <div className="p-2">
           <div className="fs-5 fw-semibold mb-3"><i className="bi bi-lock me-2" aria-hidden="true" />{id.appName}</div>

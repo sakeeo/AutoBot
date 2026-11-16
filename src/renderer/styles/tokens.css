@@ -188,10 +188,10 @@ code { color: var(--color-primary-text); font-size: 0.8125rem; }
   --bs-btn-active-bg: var(--color-danger-soft); --bs-btn-active-color: var(--color-danger-text); --bs-btn-active-border-color: var(--color-danger);
   --bs-btn-disabled-bg: var(--color-surface); --bs-btn-disabled-color: var(--color-text-muted); --bs-btn-disabled-border-color: var(--color-border);
 }
-.btn-danger { --bs-btn-bg: var(--color-danger-text); --bs-btn-color: var(--color-on-primary); --bs-btn-border-color: var(--color-danger-text); --bs-btn-hover-bg: var(--color-danger-text); --bs-btn-hover-color: var(--color-on-primary); }
+.btn-danger { --bs-btn-bg: var(--color-danger-text); --bs-btn-color: var(--color-danger-soft); --bs-btn-border-color: var(--color-danger-text); --bs-btn-hover-bg: var(--color-danger-text); --bs-btn-hover-color: var(--color-danger-soft); --bs-btn-active-bg: var(--color-danger-text); --bs-btn-active-color: var(--color-danger-soft); --bs-btn-active-border-color: var(--color-danger-text); }
 .btn-success {
-  --bs-btn-bg: var(--color-success-text); --bs-btn-color: var(--color-on-primary); --bs-btn-border-color: var(--color-success-text);
-  --bs-btn-hover-bg: var(--color-success-text); --bs-btn-hover-color: var(--color-on-primary); --bs-btn-hover-border-color: var(--color-success-text);
+  --bs-btn-bg: var(--color-success-text); --bs-btn-color: var(--color-success-soft); --bs-btn-border-color: var(--color-success-text);
+  --bs-btn-hover-bg: var(--color-success-text); --bs-btn-hover-color: var(--color-success-soft); --bs-btn-hover-border-color: var(--color-success-text);
 }
 .btn-link { --bs-btn-color: var(--color-primary-text); --bs-btn-hover-color: var(--color-primary-dark); }
 

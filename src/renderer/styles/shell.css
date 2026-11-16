@@ -54,7 +54,7 @@
 .topbar-btn:hover { background: var(--color-primary-light); color: var(--color-primary-text); }
 .topbar-count {
   position: absolute; top: 2px; right: 2px; min-width: 16px; height: 16px; padding: 0 var(--space-1);
-  border-radius: var(--radius-card); background: var(--color-danger-text); color: var(--color-on-primary);
+  border-radius: var(--radius-card); background: var(--color-danger-text); color: var(--color-danger-soft);
   font-size: 0.625rem; font-weight: 600; line-height: 16px; text-align: center;
 }
 
@@ -69,3 +69,7 @@
   border: 0; border-radius: var(--radius-control); background: transparent; color: var(--color-text-primary); font-size: 0.8125rem; text-align: left;
 }
 .profile-menu [role="menuitem"]:hover { background: var(--color-primary-light); color: var(--color-primary-text); }
+
+/* Submenu entries carry no icon so the longest label fits the 220 px sidebar on one line. */
+.sidebar-sub .sidebar-link i { display: none; }
+.sidebar-sub { margin-left: var(--space-4); }

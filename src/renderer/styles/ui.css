@@ -31,3 +31,8 @@
 .metric-list dd.kpi-value { font-size: 1.75rem; font-weight: 700; line-height: 1.2; }
 
 .lock-card { width: 380px; max-width: calc(100vw - var(--space-8)); }
+
+.kpi-value { font-size: 1.75rem; font-weight: 700; line-height: 1.2; }
+
+.table-responsive { overflow-y: hidden; }
+.metric-list { align-items: center; }

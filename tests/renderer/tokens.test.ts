@@ -82,6 +82,21 @@ describe('design tokens (design-guide §11)', () => {
     for (const [fg, bg] of pairs) expect(contrast(fg, bg), `dark ${fg} on ${bg}`).toBeGreaterThanOrEqual(4.5)
   })
 
+  it('solid status fills (danger/success buttons, bell count) keep readable text in both palettes', () => {
+    const shell = readFileSync(join(dir, 'shell.css'), 'utf8')
+    const rule = (css: string, sel: string): string => {
+      const at = css.indexOf('\n' + sel + ' {')
+      return css.slice(at, css.indexOf('}', at))
+    }
+    // The text colour on a solid status fill must be the soft status colour, never a fixed white.
+    expect(rule(tokens, '.btn-danger')).toMatch(/--bs-btn-color:\s*var\(--color-danger-soft\)/)
+    expect(rule(tokens, '.btn-success')).toMatch(/--bs-btn-color:\s*var\(--color-success-soft\)/)
+    expect(rule(shell, '.topbar-count')).toMatch(/color:\s*var\(--color-danger-soft\)/)
+    for (const t of [light, { ...light, ...dark }])
+      for (const k of ['danger', 'success'])
+        expect(contrast(t[`--color-${k}-soft`], t[`--color-${k}-text`]), `${k} soft on text`).toBeGreaterThanOrEqual(4.5)
+  })
+
   it('shows a visible keyboard focus indicator', () => {
     expect(tokens).toMatch(/:focus-visible\s*\{[^}]*outline:\s*2px solid/)
   })

@@ -82,7 +82,7 @@ function LoginSection() {
           <strong>Simpan kode pemulihan ini sekarang.</strong> Kode ini satu-satunya cara mengatur ulang password dan
           tidak akan ditampilkan lagi.
           <div className="font-monospace fs-5 text-center my-2 user-select-all">{recovery}</div>
-          <button type="button" className="btn btn-sm btn-warning" onClick={() => setRecovery(null)}>
+          <button type="button" className="btn btn-sm btn-primary" onClick={() => setRecovery(null)}>
             Saya sudah menyimpannya
           </button>
         </div>

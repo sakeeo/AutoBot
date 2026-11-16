@@ -41,11 +41,11 @@ export function PreviewPanel({ beforeSend }: { beforeSend: () => Promise<void> }
         {turns.map((t, i) => (
           <div key={i} className="mb-3">
             <div className="d-flex justify-content-end mb-1">
-              <span className="badge text-bg-primary text-wrap text-start fs-6 fw-normal">{sent[i]}</span>
+              <span className="badge text-bg-primary text-wrap text-start fw-normal">{sent[i]}</span>
             </div>
             {t.replyParts.map((p, k) => (
               <div key={k} className="mb-1">
-                <span className="badge text-bg-light border text-wrap text-start fs-6 fw-normal">{p}</span>
+                <span className="badge text-bg-light border text-wrap text-start fw-normal">{p}</span>
               </div>
             ))}
             <div className="small text-body-secondary mt-1">

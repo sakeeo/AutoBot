@@ -129,7 +129,7 @@ export function DashboardPage() {
         <div className="col-md-4"><PeriodCard title="7 hari terakhir" data={data.week} /></div>
         <div className="col-md-4">
           <Card title="Menunggu admin" className="h-100">
-            <div className="display-6 fw-bold">{data.waitingAdmin}</div>
+            <div className="kpi-value">{data.waitingAdmin}</div>
             <div className="small text-body-secondary">chat yang menunggu balasan manusia</div>
           </Card>
         </div>
