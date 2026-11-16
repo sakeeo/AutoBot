@@ -157,11 +157,15 @@ function boot(): void {
   })
   feed.on('message', (m) => {
     send(C.evtMessage, m)
-    const n = incomingNotification(m, { enabled: settings.get().notifyIncoming, locked: isLocked(), now: Date.now() })
-    if (n && Notification.isSupported()) {
-      const note = new Notification(n)
-      note.on('click', showWindow)
-      note.show()
+    try {
+      const n = incomingNotification(m, { enabled: settings.get().notifyIncoming, locked: isLocked(), now: Date.now() })
+      if (n && Notification.isSupported()) {
+        const note = new Notification(n)
+        note.on('click', showWindow)
+        note.show()
+      }
+    } catch (e) {
+      logger.warn({ err: e }, 'notification failed')
     }
   })
   indexer.on('status', (e) => send(C.evtIndexStatus, e))
@@ -175,6 +179,7 @@ function boot(): void {
     if (Notification.isSupported())
       new Notification({ title: 'Pelanggan diserahkan ke admin', body: redactWhenLocked(isLocked, `${e.chatId.split('@')[0]} · ${e.reason}`, 'Buka aplikasi untuk melihat detail') }).show()
   })
+  pipeline.on('feed_error', (e) => logger.warn({ err: e }, 'message feed failed'))
   pipeline.start()
 
   const restartIndexer = (): void => {

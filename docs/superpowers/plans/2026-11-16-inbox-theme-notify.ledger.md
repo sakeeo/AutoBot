@@ -1,0 +1,16 @@
+# SDD ledger — plan: /home/muhammadlim/Documents/Kerabat koding - Software House/wa-otomation/docs/superpowers/plans/2026-11-16-inbox-theme-notify.md
+Pre-flight: T2 MessageFeed/FeedMessage -> T3 notify (consumes FeedMessage fields direction/at/chatId/text/isGroup) and T4 page (consumes Api.listChats/getThread/onMessage + FeedMessage/ChatSummary types from shared/ipc). T1 SettingsProvider used by T3 SecurityPage switch. No conflicts; FeedMessage/ChatSummary defined in main but must be exported from shared/ipc for the renderer (ruling: define types in src/shared/ipc.ts, re-export in message-feed.ts).
+Task 1: complete (commits 1b0a3f1..e8997c1, tests: npx vitest run tests/renderer/theme.test.tsx →    Duration  2.10s (environment 50%, tests 25%, import 18%, transform 6%))
+Task 2: Ruling: FeedMessage/ChatSummary types live in src/shared/ipc.ts (renderer needs them) and are re-exported from message-feed.ts — plan put them in main — cost: none
+Task 2: complete (commits e8997c1..5970fc2, tests: npx vitest run tests/message-feed.test.ts tests/reply-pipeline.test.ts tests/ipc-schema.test.ts →    Duration  1.29s (import 58%, tests 28%, transform 12%, worker 2%))
+Task 3: complete (commits 5970fc2..7e79ad5, tests: npx vitest run tests/notify.test.ts tests/settings.test.ts tests/renderer/settings-pages.test.tsx →    Duration  2.12s (environment 55%, tests 26%, import 14%, transform 4%, worker 1%))
+Task 4: complete (commits 7e79ad5..59afc0e, tests: npx vitest run tests/renderer →              at least ~1.35s faster with isolate: false — reuses workers across files instead of one per file)
+Task 5: complete (commits 59afc0e..c0f4332, tests: npm test →              at least ~6.56s faster with isolate: false — reuses workers across files instead of one per file)
+Final: fixed #1 a failing message feed could break replies/cooldown/takeover (pipeline guards every feed call; feed_error event; notification listener has its own try/catch) — "ReplyPipeline with a failing message feed" tests RED→GREEN, suite 531/531
+Final: fixed #2 theme toggle label stale in auto mode after an OS theme change (useEffectiveTheme) — "follows the OS" test RED→GREEN
+Final: minor (deferred): notifications also fire for groups and per message (no per-chat coalescing); Notification object not retained (click may be lost on Windows)
+Final: minor (deferred): human messages typed in groups not recorded; handoff summaries to admins not in the feed; null-id send echo recorded as "human"
+Final: minor (deferred): chats() scans whole table on each open; no retention for messages (same as message_log); chats ordered by insert id; only HH:MM shown, no date
+Final: minor (deferred): MessagesPage — open() has no catch; scroll yanks to bottom on every message; chat outside first 100 gets count 1; aria-live noise on log; groups show raw id and every sender is "Pelanggan"
+Final: minor (deferred): theme patch failure silent; lock screen in auto does not follow OS while locked; redundant menu-bar calls; mac Cmd+W/Cmd+M and Cmd+Opt+I not handled
+Final: Ruling: notifications fire for groups too and are not coalesced — spec asks for every incoming chat; a product call to revisit — cost: noisy in busy groups (the switch turns all off)

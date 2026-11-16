@@ -463,3 +463,49 @@ describe('ReplyPipeline message feed', () => {
   })
 })
 
+describe('ReplyPipeline with a failing message feed', () => {
+  const broken = (): MessageFeed => {
+    const boom = () => { throw new Error('disk full') }
+    return { recordIncoming: boom, recordOutgoing: boom, recordHuman: boom } as unknown as MessageFeed
+  }
+  function withBrokenFeed() {
+    const t = setup()
+    const conv = new ConversationStore(t.db, t.clock)
+    const pipeline = new ReplyPipeline({
+      gateway: t.gateway, store: t.store, settings: t.settings, db: t.db, ai: () => null, clock: t.clock,
+      rand: () => 0.5, conv, brand: () => t.brand, feed: broken(),
+      agent: new ConversationAgent({ store: t.store, catalog: new CatalogStore(t.db), conv,
+        handoff: new HandoffService({ gateway: t.gateway, conv, clock: t.clock }), gateway: t.gateway, clock: t.clock })
+    })
+    return { ...t, conv, pipeline }
+  }
+
+  it('still answers, writes the cooldown and logs the decision when every feed call throws', async () => {
+    const t = withBrokenFeed()
+    let pending: Promise<unknown> | undefined
+    expect(() => { pending = t.pipeline.handle(t.msg()) }).not.toThrow()
+    expect(await pending).toMatchObject({ kind: 'replied' })
+    expect(t.gateway.sent).toHaveLength(1)
+    expect(t.db.prepare('SELECT COUNT(*) AS n FROM cooldowns').get()).toEqual({ n: 1 })
+    expect(t.db.prepare('SELECT decision FROM message_log').get()).toEqual({ decision: 'replied:extractive' })
+  })
+  it('still detects a human typing while the bot is sending', async () => {
+    const t = withBrokenFeed()
+    t.gateway.onSend = async () => { await t.pipeline.handle(t.msg({ fromMe: true, id: 'HUMAN-9', text: 'saya admin' })) }
+    await t.pipeline.handle(t.msg())
+    expect(t.conv.getState('6281@s.whatsapp.net').status).toBe('manusia')
+  })
+  it('still pauses the bot when a human types on the phone', async () => {
+    const t = withBrokenFeed()
+    await t.pipeline.handle(t.msg({ fromMe: true, id: 'HUMAN-8', text: 'halo, saya admin' }))
+    expect(t.conv.getState('6281@s.whatsapp.net').status).toBe('manusia')
+  })
+  it('reports the feed failure through an event instead of throwing', async () => {
+    const t = withBrokenFeed()
+    const seen: unknown[] = []
+    t.pipeline.on('feed_error', (e) => seen.push(e))
+    await t.pipeline.handle(t.msg())
+    expect(seen.length).toBeGreaterThan(0)
+  })
+})
+

@@ -81,9 +81,13 @@ describe('theme setting', () => {
     setApi('auto')
     render(<App />)
     await waitFor(() => expect(dataTheme()).toBe('dark'))
+    expect(await screen.findByRole('button', { name: 'Beralih ke mode terang' })).toBeTruthy()
     osDark = false
     act(() => mqListeners.forEach((l) => l()))
     await waitFor(() => expect(dataTheme()).toBe('light'))
+    // The toggle must follow the OS too, or it would offer the mode that is already showing.
+    expect(await screen.findByRole('button', { name: 'Beralih ke mode gelap' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Beralih ke mode terang' })).toBeNull()
   })
 })
 

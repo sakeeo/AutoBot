@@ -66,7 +66,7 @@ export class ReplyPipeline extends EventEmitter {
   handle(m: IncomingMessage): Promise<PipelineResult> {
     // Our own messages never wait behind a customer message: a human may type while the bot is still composing.
     if (m.fromMe) return Promise.resolve(this.handleOwn(m))
-    this.d.feed?.recordIncoming(m)
+    this.record(() => this.d.feed?.recordIncoming(m))
     const prev = this.chains.get(m.chatId) ?? Promise.resolve()
     const next = prev.then(() => this.run(m))
     const tail = next.catch(() => undefined)
@@ -75,6 +75,15 @@ export class ReplyPipeline extends EventEmitter {
       if (this.chains.get(m.chatId) === tail) this.chains.delete(m.chatId)
     })
     return next
+  }
+
+  /** The feed is a view of the conversation; whatever goes wrong in it must never change what the bot does. */
+  private record(fn: () => unknown): void {
+    try {
+      fn()
+    } catch (e) {
+      this.emit('feed_error', e)
+    }
   }
 
   /** A message sent from this account: the bot's own echo, or a human typing from the phone. */
@@ -95,7 +104,7 @@ export class ReplyPipeline extends EventEmitter {
   private takeover(m: IncomingMessage): void {
     this.d.conv.pauseFor(m.chatId, 'manusia', this.d.brand().limits.pauseHours)
     this.d.conv.appendTurn(m.chatId, 'admin', m.text ?? '(pesan non-teks)')
-    this.d.feed?.recordHuman(m)
+    this.record(() => this.d.feed?.recordHuman(m))
   }
 
   private async run(m: IncomingMessage): Promise<PipelineResult> {
@@ -234,7 +243,7 @@ export class ReplyPipeline extends EventEmitter {
     try {
       sentId = await this.d.gateway.sendText(chatId, text, { typingMs })
       if (sentId) this.d.conv.rememberSentId(sentId)
-      this.d.feed?.recordOutgoing(chatId, text, sentId)
+      this.record(() => this.d.feed?.recordOutgoing(chatId, text, sentId))
     } finally {
       this.inflight.delete(chatId)
     }

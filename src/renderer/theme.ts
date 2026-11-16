@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import type { Settings } from '../shared/types'
 
 const KEY = 'wa-theme'
@@ -29,4 +30,18 @@ export function applyCachedTheme(): void {
     /* fall back to auto */
   }
   document.documentElement.dataset.bsTheme = effectiveTheme(theme)
+}
+
+/** The mode actually shown, kept current when the OS changes theme while the setting is 'auto'. */
+export function useEffectiveTheme(theme: Settings['theme']): 'light' | 'dark' {
+  const [, tick] = useState(0)
+  useEffect(() => {
+    if (theme !== 'auto') return
+    const mq = window.matchMedia?.('(prefers-color-scheme: dark)')
+    if (!mq) return
+    const on = (): void => tick((n) => n + 1)
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [theme])
+  return effectiveTheme(theme)
 }

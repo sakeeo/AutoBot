@@ -3,7 +3,7 @@ import type { ConnStatus } from '../../shared/types'
 import { id } from '../i18n/id'
 import { useAuth } from '../auth-context'
 import { useSettings } from '../settings-context'
-import { effectiveTheme } from '../theme'
+import { useEffectiveTheme } from '../theme'
 import { Breadcrumb } from './Breadcrumb'
 
 const TONE: Record<ConnStatus['state'], string> = {
@@ -26,6 +26,7 @@ interface Props {
 export function TopBar({ crumbs, showMenuButton, onMenu, menuRef, onGoDashboard, onGoSecurity }: Props) {
   const { state: auth, refresh } = useAuth()
   const [settings, patchSettings] = useSettings()
+  const shown = useEffectiveTheme(settings?.theme ?? 'light')
   const [status, setStatus] = useState<ConnStatus['state']>('disconnected')
   const [waiting, setWaiting] = useState(0)
   const [profileOpen, setProfileOpen] = useState(false)
@@ -76,7 +77,7 @@ export function TopBar({ crumbs, showMenuButton, onMenu, menuRef, onGoDashboard,
         {waiting > 0 && <span className="topbar-count" aria-hidden="true">{waiting}</span>}
       </button>
       {settings && (() => {
-        const dark = effectiveTheme(settings.theme) === 'dark'
+        const dark = shown === 'dark'
         return (
           <button type="button" className="topbar-btn" aria-label={dark ? 'Beralih ke mode terang' : 'Beralih ke mode gelap'}
             onClick={() => patchSettings({ theme: dark ? 'light' : 'dark' })}>
