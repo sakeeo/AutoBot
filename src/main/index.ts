@@ -1,6 +1,6 @@
 import { app, BrowserWindow, Notification, safeStorage } from 'electron'
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import pino from 'pino'
 import { openDb } from './db'
 import { SafeStorageSecretStore, SettingsStore } from './settings'
@@ -9,7 +9,10 @@ import { Indexer } from './knowledge/indexer'
 import { ReplyPipeline } from './pipeline/reply-pipeline'
 import { BaileysGateway } from './wa/baileys-gateway'
 import { ConversationStore } from './conversation/store'
+import { HandoffService } from './conversation/handoff'
 import { BrandStore } from './brand-store'
+import { CatalogStore, parseCatalog } from './catalog/catalog-store'
+import { ConversationAgent } from './pipeline/conversation-agent'
 import type { AiProvider } from './answer/ai-answerer'
 import { makeProvider } from './answer/make-provider'
 import { secretNameFor } from '../shared/providers'
@@ -64,7 +67,17 @@ function boot(): void {
   const settings = new SettingsStore(join(data, 'settings.json'))
   const secrets = new SafeStorageSecretStore(join(data, 'secrets.json'), safeStorage)
   const store = new IndexStore(db)
-  const indexer = new Indexer(store)
+  const catalog = new CatalogStore(db)
+  const isCatalogFile = (file: string): boolean => ['katalog.csv', 'katalog.json'].includes(basename(file).toLowerCase())
+  const indexer = new Indexer(store, {
+    onDocument: (file, raw, ext) => {
+      if (!isCatalogFile(file)) return
+      const { products, errors } = parseCatalog(raw, ext as '.csv' | '.json')
+      catalog.replaceFromFile(file, products)
+      for (const e of errors) logger.warn({ file }, `katalog: ${e}`)
+    },
+    onRemove: (file) => { if (isCatalogFile(file)) catalog.removeFile(file) }
+  })
   const sessionDir = join(data, 'sessions', 'default')
   const gateway = new BaileysGateway({ sessionDir, logger: logger.child({ mod: 'baileys' }, { level: 'warn' }) })
 
@@ -80,7 +93,12 @@ function boot(): void {
 
   const clock = { now: () => Date.now() }
   const conv = new ConversationStore(db, clock)
-  const brandStore = new BrandStore(db, clock, () => ({ botNumber: gateway.selfNumber(), productCount: 0 }))
+  const brandStore = new BrandStore(db, clock, () => ({
+    botNumber: gateway.selfNumber(),
+    productCount: catalog.list().length
+  }))
+  const handoff = new HandoffService({ gateway, conv, clock })
+  const agent = new ConversationAgent({ store, catalog, conv, handoff, gateway, clock })
 
   const pipeline = new ReplyPipeline({
     gateway, store, settings, db,
@@ -88,7 +106,8 @@ function boot(): void {
     clock,
     rand: Math.random,
     conv,
-    brand: () => brandStore.getActive()
+    brand: () => brandStore.getActive(),
+    agent
   })
 
   let status: ConnStatus = { state: 'disconnected' }
@@ -113,6 +132,10 @@ function boot(): void {
     send(C.evtEscalate, { chatId: m.chatId, text: m.text })
     if (Notification.isSupported())
       new Notification({ title: 'Perlu dibalas manual', body: (m.text ?? '').slice(0, 120) }).show()
+  })
+  handoff.on('handoff', (e: { chatId: string; reason: string }) => {
+    if (Notification.isSupported())
+      new Notification({ title: 'Pelanggan diserahkan ke admin', body: `${e.chatId.split('@')[0]} · ${e.reason}` }).show()
   })
   pipeline.start()
 

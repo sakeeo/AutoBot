@@ -6,6 +6,9 @@ import { openDb } from '../src/main/db'
 import { IndexStore } from '../src/main/knowledge/index-store'
 import { SettingsStore } from '../src/main/settings'
 import { ConversationStore } from '../src/main/conversation/store'
+import { HandoffService } from '../src/main/conversation/handoff'
+import { CatalogStore } from '../src/main/catalog/catalog-store'
+import { ConversationAgent } from '../src/main/pipeline/conversation-agent'
 import { PRESETS } from '../src/shared/brand'
 import { ReplyPipeline } from '../src/main/pipeline/reply-pipeline'
 import type { WaGateway } from '../src/main/wa/gateway'
@@ -43,14 +46,17 @@ function setup(opts: { ai?: AiProvider | null } = {}) {
   const clock = { t: 1_700_000_000_000, now() { return this.t } }
   let rand = 0.5
   const brand = structuredClone(PRESETS.kustom)
-  const make = (database = db) =>
-    new ReplyPipeline({
+  const make = (database = db) => {
+    const conv = new ConversationStore(database, clock)
+    const handoff = new HandoffService({ gateway, conv, clock })
+    const agent = new ConversationAgent({ store, catalog: new CatalogStore(database), conv, handoff, gateway, clock })
+    return new ReplyPipeline({
       gateway, store, settings, db: database,
       ai: () => opts.ai ?? null,
       clock, rand: () => rand,
-      conv: new ConversationStore(database, clock),
-      brand: () => brand
+      conv, brand: () => brand, agent
     })
+  }
   let n = 0
   const msg = (o: Partial<IncomingMessage> = {}): IncomingMessage => ({
     id: `m${++n}`, chatId: '6281@s.whatsapp.net', sender: '6281@s.whatsapp.net',
@@ -64,6 +70,26 @@ function setup(opts: { ai?: AiProvider | null } = {}) {
 }
 
 const HOUR = 3_600_000
+
+const agentOut = (o: Record<string, unknown> = {}) =>
+  JSON.stringify({
+    intent: 'tanya_harga', stage: 'harga', reply_parts: ['Kopi susu Rp25.000 per gelas ya Kak'], lead_updates: {},
+    product_id: null, suggested_action: 'none', confidence: 0.9, sources: ['faq.md'], ...o
+  })
+
+function scripted(outs: (string | Error)[]) {
+  const calls: { system: string; user: string }[] = []
+  let i = 0
+  const provider: AiProvider = {
+    complete: async (req) => {
+      calls.push({ system: req.system, user: req.user })
+      const o = outs[Math.min(i++, outs.length - 1)]
+      if (o instanceof Error) throw o
+      return o
+    }
+  }
+  return { provider, calls }
+}
 
 describe('ReplyPipeline filters', () => {
   it('replies with a sourced answer when the folder has one', async () => {
@@ -190,7 +216,7 @@ describe('ReplyPipeline human takeover', () => {
     const pending = t.pipeline.handle(t.msg())
     await new Promise((r) => setTimeout(r, 10))
     await t.pipeline.handle(human(t))
-    release('{"answerable":true,"answer":"Kopi susu Rp25.000.","sources":["faq.md"]}')
+    release(agentOut())
     expect(await pending).toEqual({ kind: 'ignored', why: 'human' })
     expect(t.gateway.sent).toHaveLength(0)
   })
@@ -251,32 +277,101 @@ describe('ReplyPipeline out of context', () => {
   })
 })
 
-describe('ReplyPipeline ai mode', () => {
-  const aiOk: AiProvider = {
-    complete: async () => '{"answerable":true,"answer":"Kopi susu Rp25.000.","sources":["faq.md"]}'
+describe('ReplyPipeline ai mode (conversation agent)', () => {
+  const aiSetup = (outs: (string | Error)[]) => {
+    const p = scripted(outs)
+    const t = setup({ ai: p.provider })
+    t.settings.update({ mode: 'ai' })
+    return { t, calls: p.calls }
   }
-  it('answers through the provider and cites sources', async () => {
-    const t = setup({ ai: aiOk })
-    t.settings.update({ mode: 'ai' })
-    expect(await t.pipeline.handle(t.msg())).toMatchObject({ kind: 'replied', via: 'ai', sources: ['faq.md'] })
-    expect(t.gateway.sent[0].text).toBe('Kopi susu Rp25.000.')
+  const e401 = () => Object.assign(new Error('x'), { status: 401 })
+
+  it('sends the model reply as separate bubbles, in order, with human-like typing delays', async () => {
+    const { t } = aiSetup([agentOut({ reply_parts: ['Kopi susu Rp25.000 per gelas ya Kak', 'Mau saya bantu pesan?'] })])
+    const r = await t.pipeline.handle(t.msg())
+    expect(r).toMatchObject({ kind: 'replied', via: 'ai' })
+    expect(t.gateway.sent.map((s) => s.text)).toEqual(['Kopi susu Rp25.000 per gelas ya Kak', 'Mau saya bantu pesan?'])
+    for (const s of t.gateway.sent) {
+      expect(s.typingMs).toBeGreaterThanOrEqual(1000)
+      expect(s.typingMs).toBeLessThanOrEqual(6000)
+    }
   })
-  it('falls back to extractive when the provider fails with AUTH', async () => {
-    const bad: AiProvider = { complete: async () => { throw Object.assign(new Error('x'), { status: 401 }) } }
-    const t = setup({ ai: bad })
-    t.settings.update({ mode: 'ai' })
-    expect(await t.pipeline.handle(t.msg())).toMatchObject({ kind: 'replied', via: 'extractive' })
+  it('hands the customer to the admin on a complaint: summary to the admin, farewell to the customer', async () => {
+    const { t } = aiSetup([agentOut({ intent: 'komplain', reply_parts: ['Maaf ya Kak'], sources: [] })])
+    t.brand.admins = [{ id: 'a1', name: 'Budi', number: '0812-3456-7890', notifyWhatsapp: true }]
+    const r = await t.pipeline.handle(t.msg({ text: 'pesanan saya rusak' }))
+    expect(r).toEqual({ kind: 'handoff', reason: 'komplain' })
+    expect(t.gateway.sent[0].chatId).toBe('6281234567890@s.whatsapp.net')
+    expect(t.gateway.sent[0].text).toContain('pesanan saya rusak')
+    expect(t.gateway.sent[t.gateway.sent.length - 1].chatId).toBe('6281@s.whatsapp.net')
+    expect(await t.pipeline.handle(t.msg({ text: 'halo?' }))).toEqual({ kind: 'ignored', why: 'human' })
   })
-  it('falls back to extractive when no provider is configured', async () => {
+  it('answers greetings and thanks in ai mode', async () => {
+    const { t } = aiSetup([agentOut({ intent: 'sapaan', reply_parts: ['Halo Kak! Ada yang bisa dibantu?'], sources: [] })])
+    expect(await t.pipeline.handle(t.msg({ text: 'halo' }))).toMatchObject({ kind: 'replied', via: 'ai' })
+    expect(t.gateway.sent[0].text).toBe('Halo Kak! Ada yang bisa dibantu?')
+  })
+  it('does not use the per-contact cooldown in ai mode but enforces the hourly reply limit', async () => {
+    const { t } = aiSetup([agentOut()])
+    t.brand.limits.maxRepliesPerHour = 2
+    expect(await t.pipeline.handle(t.msg())).toMatchObject({ kind: 'replied' })
+    t.clock.t += 1000
+    expect(await t.pipeline.handle(t.msg())).toMatchObject({ kind: 'replied' })
+    t.clock.t += 1000
+    expect(await t.pipeline.handle(t.msg())).toEqual({ kind: 'ignored', why: 'rate_limit' })
+    t.clock.t += HOUR + 1000
+    expect(await t.pipeline.handle(t.msg())).toMatchObject({ kind: 'replied' })
+  })
+  it('processes rapid messages from one contact in order and gives later ones the earlier history', async () => {
+    const { t, calls } = aiSetup([
+      agentOut({ intent: 'sapaan', reply_parts: ['Halo Kak'], sources: [] }),
+      agentOut({ intent: 'sapaan', reply_parts: ['Silakan Kak'], sources: [] }),
+      agentOut()
+    ])
+    const results = await Promise.all([
+      t.pipeline.handle(t.msg({ text: 'halo' })),
+      t.pipeline.handle(t.msg({ text: 'mau tanya' })),
+      t.pipeline.handle(t.msg({ text: 'berapa harga kopi?' }))
+    ])
+    expect(results.every((r) => r.kind === 'replied')).toBe(true)
+    expect(t.gateway.sent.map((s) => s.text)).toEqual(['Halo Kak', 'Silakan Kak', 'Kopi susu Rp25.000 per gelas ya Kak'])
+    expect(calls[2].user).toContain('pelanggan: halo')
+    expect(calls[2].user).toContain('pelanggan: mau tanya')
+    expect(calls[2].user).toContain('bot: Halo Kak')
+  })
+  it('hands off with ai_gagal when the provider fails for a service business', async () => {
+    const { t } = aiSetup([e401()])
+    expect(await t.pipeline.handle(t.msg())).toEqual({ kind: 'handoff', reason: 'ai_gagal' })
+    expect(t.gateway.sent).toHaveLength(1)
+    expect(t.gateway.sent[0].text).not.toMatch(/error|json|401/i)
+  })
+  it('says it does not know when the provider fails for a product business', async () => {
+    const { t } = aiSetup([e401()])
+    t.brand.businessType = 'produk'
+    expect(await t.pipeline.handle(t.msg())).toEqual({ kind: 'out_of_context', action: 'reply' })
+    expect(t.gateway.sent[0].text).toContain('kurang tahu')
+  })
+  it('falls back to the plain extractive answer when no provider is configured', async () => {
     const t = setup({ ai: null })
     t.settings.update({ mode: 'ai' })
     expect(await t.pipeline.handle(t.msg())).toMatchObject({ kind: 'replied', via: 'extractive' })
   })
-  it('treats answerable:false as out of context', async () => {
-    const no: AiProvider = { complete: async () => '{"answerable":false,"answer":"","sources":[]}' }
-    const t = setup({ ai: no })
-    t.settings.update({ mode: 'ai' })
-    expect(await t.pipeline.handle(t.msg())).toEqual({ kind: 'out_of_context', action: 'reply' })
+  it('records handoffs and ai replies in the audit log', async () => {
+    const { t } = aiSetup([agentOut({ intent: 'komplain', sources: [] })])
+    const m = t.msg({ text: 'rusak' })
+    await t.pipeline.handle(m)
+    const row = t.db.prepare('SELECT decision FROM message_log WHERE message_id = ?').get(m.id) as { decision: string }
+    expect(row.decision).toBe('handoff:komplain')
+  })
+  it('previews an ai turn without sending, storing or handing off', async () => {
+    const { t } = aiSetup([agentOut({ intent: 'komplain', sources: [] })])
+    const p = await t.pipeline.preview('rusak total')
+    expect(p.via).toBe('ai')
+    expect(p.agent?.handoff).toEqual({ reason: 'komplain' })
+    expect(t.gateway.sent).toEqual([])
+    expect((t.db.prepare('SELECT COUNT(*) c FROM turns').get() as { c: number }).c).toBe(0)
+    expect((t.db.prepare('SELECT COUNT(*) c FROM message_log').get() as { c: number }).c).toBe(0)
+    expect((t.db.prepare('SELECT COUNT(*) c FROM handoffs').get() as { c: number }).c).toBe(0)
   })
 })
 

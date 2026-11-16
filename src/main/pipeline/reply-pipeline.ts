@@ -3,20 +3,24 @@ import type { Db } from '../db'
 import type { IndexStore } from '../knowledge/index-store'
 import type { SettingsStore } from '../settings'
 import type { WaGateway } from '../wa/gateway'
-import type { Answer, Decision, Hit, IncomingMessage } from '../../shared/types'
+import type { Answer, Decision, IncomingMessage } from '../../shared/types'
 import { decide } from '../answer/gate'
 import { buildExtractiveAnswer } from '../answer/extractive'
-import { AiError, askAi, type AiProvider } from '../answer/ai-answerer'
+import type { AiProvider } from '../answer/ai-answerer'
 import type { ConversationStore } from '../conversation/store'
+import { splitBubbles, typingMsFor } from '../conversation/bubbles'
+import type { ConversationAgent, AgentTurnResult } from './conversation-agent'
 import type { BrandProfile } from '../../shared/brand'
+import type { Settings } from '../../shared/types'
 
 export type PipelineResult =
   | {
       kind: 'ignored'
-      why: 'from_me' | 'no_text' | 'group' | 'status' | 'stale' | 'duplicate' | 'cooldown' | 'human'
+      why: 'from_me' | 'no_text' | 'group' | 'status' | 'stale' | 'duplicate' | 'cooldown' | 'human' | 'rate_limit'
     }
-  | { kind: 'replied'; sources: string[]; via: 'extractive' | 'ai' }
+  | { kind: 'replied'; sources: string[]; via: 'extractive' | 'ai'; linkSent?: string | null }
   | { kind: 'out_of_context'; action: 'reply' | 'silent' | 'escalate' }
+  | { kind: 'handoff'; reason: string }
   | { kind: 'error'; message: string }
 
 export interface PipelineDeps {
@@ -29,6 +33,7 @@ export interface PipelineDeps {
   rand: () => number
   conv: ConversationStore
   brand: () => BrandProfile
+  agent: ConversationAgent
 }
 
 /** Thrown right before sending when a human took over the chat while the answer was being prepared. */
@@ -132,6 +137,11 @@ export class ReplyPipeline extends EventEmitter {
     if (this.d.clock.now() - m.timestamp > STALE_MS) return ignored('stale')
     if (this.d.conv.isPaused(m.chatId)) return ignored('human')
 
+    // AI mode: the conversation agent answers. It has no per-contact cooldown (customers send several
+    // short messages in a row) but is held to an hourly reply limit.
+    const provider = s.mode === 'ai' ? this.d.ai() : null
+    if (provider) return this.processAgent(m, s, provider)
+
     const cd = this.d.db.prepare('SELECT last_at FROM cooldowns WHERE chat_id = ?').get(m.chatId) as
       | { last_at: number }
       | undefined
@@ -146,42 +156,59 @@ export class ReplyPipeline extends EventEmitter {
       return { result: { kind: 'out_of_context', action: 'silent' }, top, sources: [] }
     if (decision.kind === 'out_of_context') return this.outOfContext(m, top)
 
-    const answered = await this.answer(m.text, decision.hits, s.mode, s.ai)
-    if (!answered) return this.outOfContext(m, top)
-    await this.send(m.chatId, answered.answer.text)
-    return {
-      result: { kind: 'replied', sources: answered.answer.sources, via: answered.via },
-      top,
-      sources: answered.answer.sources
-    }
+    const answer = buildExtractiveAnswer(m.text, decision.hits)
+    await this.send(m.chatId, answer.text)
+    return { result: { kind: 'replied', sources: answer.sources, via: 'extractive' }, top, sources: answer.sources }
+  }
+
+  private async processAgent(
+    m: IncomingMessage,
+    s: Settings,
+    provider: AiProvider
+  ): Promise<{ result: PipelineResult; top: number | null; sources: string[] }> {
+    const profile = this.d.brand()
+    const now = this.d.clock.now()
+    if (this.d.conv.countRepliesSince(m.chatId, now - 3_600_000) >= profile.limits.maxRepliesPerHour)
+      return { result: { kind: 'ignored', why: 'rate_limit' }, top: null, sources: [] }
+
+    const r = await this.d.agent.handleTurn({
+      chatId: m.chatId, text: m.text ?? '', profile, provider, cfg: s.ai, dryRun: false
+    })
+    const bubbles = splitBubbles(r.replyParts)
+    for (const b of bubbles) await this.send(m.chatId, b, typingMsFor(b, this.d.rand))
+
+    const top = r.hits[0]?.coverage ?? null
+    if (r.handoff) return { result: { kind: 'handoff', reason: r.handoff.reason }, top, sources: r.sources }
+    if (bubbles.length === 0) return { result: { kind: 'out_of_context', action: 'silent' }, top, sources: [] }
+    if (r.intent === 'di_luar_konteks') return { result: { kind: 'out_of_context', action: 'reply' }, top, sources: [] }
+    return { result: { kind: 'replied', sources: r.sources, via: 'ai', linkSent: r.linkSent }, top, sources: r.sources }
   }
 
   /** Dry run for the "Uji Jawaban" panel: same retrieval, gate and answerer, but nothing is sent or logged. */
-  async preview(text: string): Promise<{ decision: Decision; answer: Answer | null; via: 'extractive' | 'ai' | null }> {
+  async preview(text: string): Promise<{
+    decision: Decision
+    answer: Answer | null
+    via: 'extractive' | 'ai' | null
+    agent?: AgentTurnResult
+  }> {
     const s = this.d.settings.get()
+    const provider = s.mode === 'ai' ? this.d.ai() : null
+    if (provider) {
+      const agent = await this.d.agent.handleTurn({
+        chatId: '__preview__', text, profile: this.d.brand(), provider, cfg: s.ai, dryRun: true
+      })
+      const decision: Decision =
+        agent.intent === 'di_luar_konteks' || agent.hits.length === 0
+          ? { kind: 'out_of_context', reason: agent.hits.length === 0 ? 'no_hits' : 'below_threshold' }
+          : { kind: 'answerable', hits: agent.hits }
+      const answer = agent.replyParts.length
+        ? { text: agent.replyParts.join('\n\n'), sources: agent.sources }
+        : null
+      return { decision, answer, via: 'ai', agent }
+    }
     const decision = decide(text, this.d.store.search(text, TOP_K), s.threshold)
     if (decision.kind === 'out_of_context') return { decision, answer: null, via: null }
-    const answered = await this.answer(text, decision.hits, s.mode, s.ai)
-    return { decision, answer: answered?.answer ?? null, via: answered?.via ?? null }
-  }
-
-  private async answer(
-    text: string,
-    hits: Hit[],
-    mode: 'extractive' | 'ai',
-    ai: { model: string; maxTokens: number }
-  ): Promise<{ answer: Answer; via: 'extractive' | 'ai' } | null> {
-    const extractive = () => ({ answer: buildExtractiveAnswer(text, hits), via: 'extractive' as const })
-    if (mode !== 'ai') return extractive()
-    const provider = this.d.ai()
-    if (!provider) return extractive()
-    try {
-      const a = await askAi(provider, text, hits, ai)
-      return a ? { answer: a, via: 'ai' } : null
-    } catch (e) {
-      if (e instanceof AiError) return extractive()
-      throw e
-    }
+    return { decision, answer: buildExtractiveAnswer(text, decision.hits), via: 'extractive' }
   }
 
   private async outOfContext(m: IncomingMessage, top: number | null) {
@@ -191,10 +218,11 @@ export class ReplyPipeline extends EventEmitter {
     return { result: { kind: 'out_of_context', action } as PipelineResult, top, sources: [] as string[] }
   }
 
-  private async send(chatId: string, text: string): Promise<void> {
-    // The human may have taken over while the answer was being prepared.
-    if (this.d.conv.isPaused(chatId)) throw new PausedError()
-    const typingMs = TYPING_MIN_MS + Math.floor(this.d.rand() * (TYPING_SPAN_MS + 1))
+  private async send(chatId: string, text: string, typing?: number): Promise<void> {
+    // A human may have taken over while the answer was being prepared. (The 'menunggu_admin' pause is our
+    // own handoff, whose farewell must still be delivered.)
+    if (this.d.conv.getState(chatId).status === 'manusia') throw new PausedError()
+    const typingMs = typing ?? TYPING_MIN_MS + Math.floor(this.d.rand() * (TYPING_SPAN_MS + 1))
     const pending: IncomingMessage[] = []
     this.inflight.set(chatId, pending)
     let sentId: string | null = null
@@ -220,6 +248,7 @@ function describe(r: PipelineResult): string {
     case 'ignored': return `ignored:${r.why}`
     case 'replied': return `replied:${r.via}`
     case 'out_of_context': return `out_of_context:${r.action}`
+    case 'handoff': return `handoff:${r.reason}`
     case 'error': return `error:${r.message}`
   }
 }

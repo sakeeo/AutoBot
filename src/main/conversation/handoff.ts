@@ -97,6 +97,24 @@ export function formatLeadSummary(input: {
   return lines.join('\n')
 }
 
+/** The goodbye sent to the customer on handoff; pure, so dry runs can show it without side effects. */
+export function farewellText(
+  profile: BrandProfile,
+  nowMs: number,
+  productName: string | null,
+  lead: Record<string, string>
+): string {
+  const vars = {
+    sapaan: greetingWord(profile),
+    jam_kerja: formatHoursText(profile),
+    produk: productName ?? '',
+    nama: lead.nama ?? ''
+  }
+  let farewell = fillTemplate(profile.templates.handoffFarewell, vars)
+  if (!isWithinHours(profile, nowMs)) farewell += ' ' + fillTemplate(profile.templates.outsideHours, vars)
+  return farewell
+}
+
 export interface HandoffEvent {
   chatId: string
   reason: string
@@ -143,15 +161,7 @@ export class HandoffService extends EventEmitter {
       }
     }
 
-    const vars = {
-      sapaan: greetingWord(profile),
-      jam_kerja: formatHoursText(profile),
-      produk: input.productName ?? '',
-      nama: state.lead.nama ?? ''
-    }
-    let farewell = fillTemplate(profile.templates.handoffFarewell, vars)
-    if (!isWithinHours(profile, this.d.clock.now()))
-      farewell += ' ' + fillTemplate(profile.templates.outsideHours, vars)
+    const farewell = farewellText(profile, this.d.clock.now(), input.productName, state.lead)
 
     const event: HandoffEvent = { chatId, reason, summary, notified }
     this.emit('handoff', event)
