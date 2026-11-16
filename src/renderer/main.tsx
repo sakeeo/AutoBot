@@ -7,6 +7,7 @@ import '@fontsource/inter/600.css'
 import '@fontsource/inter/700.css'
 import './styles/tokens.css'
 import './styles/shell.css'
+import './styles/ui.css'
 import { App } from './App'
 
 createRoot(document.getElementById('root')!).render(<App />)

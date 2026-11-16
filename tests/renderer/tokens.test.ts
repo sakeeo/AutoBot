@@ -86,9 +86,9 @@ describe('design tokens (design-guide §11)', () => {
     expect(tokens).toMatch(/:focus-visible\s*\{[^}]*outline:\s*2px solid/)
   })
 
-  it('never uses literal colours in the shell stylesheet (only var(--…))', () => {
-    const shell = join(dir, 'shell.css')
-    if (!existsSync(shell)) return
-    expect(readFileSync(shell, 'utf8')).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/)
+  it.each(['shell.css', 'ui.css'])('never uses literal colours in %s (only var(--…))', (name) => {
+    const file = join(dir, name)
+    if (!existsSync(file)) return
+    expect(readFileSync(file, 'utf8')).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/)
   })
 })

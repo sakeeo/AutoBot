@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, cleanup, waitFor, within } from '@testing-library/react'
+import { render, screen, cleanup, waitFor, within, fireEvent } from '@testing-library/react'
 import { DashboardPage } from '../../src/renderer/pages/DashboardPage'
 import { PRESETS } from '../../src/shared/brand'
 import type { DashboardData } from '../../src/shared/ipc'
@@ -122,5 +122,56 @@ describe('DashboardPage', () => {
     const handle = si.mock.results[si.mock.calls.indexOf(call!)].value
     unmount()
     expect(ci).toHaveBeenCalledWith(handle)
+  })
+
+  it('shows a loading state while the first data is on its way', async () => {
+    const { api } = setApi()
+    api.getDashboard.mockReturnValue(new Promise(() => undefined))
+    render(<DashboardPage />)
+    expect(screen.getByRole('status').textContent).toMatch(/memuat/i)
+  })
+
+  it('shows an error state with a working retry when the data cannot be loaded', async () => {
+    const { api } = setApi()
+    api.getDashboard.mockRejectedValueOnce(new Error('db'))
+    render(<DashboardPage />)
+    expect((await screen.findByRole('alert')).textContent).toMatch(/gagal memuat/i)
+    fireEvent.click(screen.getByRole('button', { name: 'Coba lagi' }))
+    expect(await screen.findByText(/belum ada aktivitas/i)).toBeTruthy()
+    expect(api.getDashboard).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows configuration warnings as banners that can be dismissed one by one', async () => {
+    setApi({ admins: false, settings: { mode: 'ai', knowledgeFolders: [] }, key: false })
+    render(<DashboardPage />)
+    await screen.findByText(/belum ada admin/i)
+    expect(screen.getAllByRole('button', { name: 'Tutup peringatan' })).toHaveLength(3)
+    fireEvent.click(screen.getAllByRole('button', { name: 'Tutup peringatan' })[0])
+    expect(screen.queryByText(/belum ada admin/i)).toBeNull()
+    expect(screen.getByText(/api key belum diatur/i)).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: 'Tutup peringatan' })).toHaveLength(2)
+  })
+
+  it('makes the headline number a KPI and keeps the other numbers small', async () => {
+    setApi({ data: { ...empty, today: { replied: 12, refused: 3, handoff: 2, errors: 1, links: 4 } } })
+    render(<DashboardPage />)
+    const today = await screen.findByRole('region', { name: 'Hari ini' })
+    expect((within(today).getByText('Dibalas').nextSibling as HTMLElement).className).toMatch(/kpi-value/)
+    expect((within(today).getByText('Ditolak').nextSibling as HTMLElement).className).not.toMatch(/kpi-value/)
+  })
+
+  it('lists recent activity as a table with a time, a text badge for the decision and the message', async () => {
+    setApi({
+      data: {
+        ...empty,
+        recent: [{ message_id: '1', chat_id: '62812@s.whatsapp.net', decision: 'replied:ai', top_score: null,
+          sources: null, created_at: 1700000000000, text: 'berapa harga?' }]
+      }
+    })
+    render(<DashboardPage />)
+    await screen.findByText(/berapa harga/)
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Waktu', 'Keputusan', 'Pesan'])
+    const badge = screen.getByText('replied:ai')
+    expect(badge.className).toMatch(/badge/)
   })
 })

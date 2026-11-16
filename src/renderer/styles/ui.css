@@ -1,0 +1,31 @@
+/* Shared components (design-guide §6–7). Colours come only from tokens.css. */
+.page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); margin-bottom: var(--space-5); flex-wrap: wrap; }
+.page-title { display: flex; align-items: center; gap: var(--space-2); margin: 0; font-size: 1.375rem; font-weight: 700; }
+.page-title i { font-size: 1.25rem; color: var(--color-primary-text); }
+.page-subtitle { margin: var(--space-1) 0 0; color: var(--color-text-muted); font-size: 0.8125rem; }
+.page-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+
+.state-box { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-4) 0; font-size: 0.8125rem; }
+.state-empty { flex-direction: column; justify-content: center; padding: var(--space-8) var(--space-4); text-align: center; }
+.state-empty i { font-size: 1.75rem; color: var(--color-text-muted); }
+
+.confirm-inline { display: inline-flex; align-items: center; gap: var(--space-2); }
+.confirm-text { color: var(--color-danger-text); font-size: 0.75rem; font-weight: 600; }
+
+.table-footer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding-top: var(--space-3); font-size: 0.75rem; }
+
+.announcement-banner {
+  display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); padding: var(--space-3) var(--space-4);
+  background: var(--color-primary); color: var(--color-on-primary); border-radius: var(--radius-card); font-size: 0.8125rem;
+}
+.announcement-banner .text { flex: 1; }
+.announcement-banner .close-btn {
+  border: 0; background: transparent; color: var(--color-on-primary); width: 28px; height: 28px; border-radius: var(--radius-control);
+}
+.announcement-banner .close-btn:hover { background: var(--color-sidebar-hover); }
+.announcement-banner .close-btn:focus-visible { outline-color: var(--color-on-primary); }
+
+.metric-list { display: grid; grid-template-columns: 1fr auto; column-gap: var(--space-4); row-gap: var(--space-2); margin: 0; }
+.metric-list dt { font-weight: 400; color: var(--color-text-muted); font-size: 0.8125rem; }
+.metric-list dd { margin: 0; text-align: right; font-weight: 600; font-size: 0.875rem; }
+.metric-list dd.kpi-value { font-size: 1.75rem; font-weight: 700; line-height: 1.2; }
