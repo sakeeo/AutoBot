@@ -3,6 +3,7 @@ export const id = {
   nav: {
     connection: 'Koneksi',
     knowledge: 'Pengetahuan',
+    brand: 'Brand & Konversi',
     test: 'Uji Jawaban',
     rules: 'Aturan',
     ai: 'AI',

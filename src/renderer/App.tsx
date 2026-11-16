@@ -7,11 +7,13 @@ import { KnowledgePage } from './pages/KnowledgePage'
 import { TestPanel } from './pages/TestPanel'
 import { RulesPage } from './pages/RulesPage'
 import { AiSettings } from './pages/AiSettings'
+import { BrandPage } from './pages/BrandPage'
 import { LogPage } from './pages/LogPage'
 
 const PAGES = [
   { key: 'connection', icon: 'bi-whatsapp', label: id.nav.connection, view: <ConnectionPage /> },
   { key: 'knowledge', icon: 'bi-folder2-open', label: id.nav.knowledge, view: <KnowledgePage /> },
+  { key: 'brand', icon: 'bi-bullseye', label: id.nav.brand, view: <BrandPage /> },
   { key: 'test', icon: 'bi-chat-dots', label: id.nav.test, view: <TestPanel /> },
   { key: 'rules', icon: 'bi-sliders', label: id.nav.rules, view: <RulesPage /> },
   { key: 'ai', icon: 'bi-stars', label: id.nav.ai, view: <AiSettings /> },
