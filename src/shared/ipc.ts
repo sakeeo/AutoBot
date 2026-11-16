@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { PROVIDER_IDS } from './providers'
 import type { BrandProfile, Issue } from './brand'
 import type { Answer, ConnStatus, Decision, Settings } from './types'
+import type { BContact, BroadcastEvent, Campaign, CampaignView, ContactStatus, ImportPreviewView, OverviewView, ReportView, SafetyView, SuppressReason } from './broadcast'
 
 export { CHANNELS } from './channels'
 
@@ -148,6 +149,26 @@ export interface Api {
   listPresets(): Promise<{ id: string; label: string }[]>
   loadPreset(id: string): Promise<{ ok: boolean; issues: Issue[]; error?: string }>
   getDashboard(): Promise<DashboardData>
+  bcOverview(): Promise<OverviewView>
+  bcContacts(filter?: { status?: ContactStatus }): Promise<BContact[]>
+  bcSuppressed(): Promise<{ number: string | null; jid: string | null; reason: SuppressReason; at: number }[]>
+  bcImportPreview(file: { name: string; data: string | Uint8Array }): Promise<ImportPreviewView>
+  bcImportCommit(previewId: string, attest: { accepted: boolean; sourceNote: string }): Promise<{ importId: number; added: number; notOnWhatsApp: number; blockedBySuppression: number; aborted: boolean }>
+  bcSendConfirmations(): Promise<{ ok: true; campaignId: number } | { ok: false; error: string }>
+  bcCampaigns(): Promise<CampaignView[]>
+  bcCreateCampaign(input: { name: string; template: string; audience: 'chat' | 'impor' | 'semua' }): Promise<{ ok: true; campaign: Campaign; warnings: string[] } | { ok: false; errors: string[]; warnings: string[] }>
+  bcPreviewCampaign(id: number): Promise<{ eligible: number; skipped: Record<string, number>; estimatedDays: number }>
+  bcStartCampaign(id: number, confirmText?: string): Promise<{ ok: true } | { ok: false; error: string }>
+  bcPauseCampaign(id: number): Promise<void>
+  bcResumeCampaign(id: number): Promise<{ ok: true } | { ok: false; error: string }>
+  bcStopCampaign(id: number): Promise<void>
+  bcStopAll(): Promise<void>
+  bcGetSafety(): Promise<SafetyView>
+  bcSetSafety(patch: Record<string, unknown>): Promise<{ ok: true; safety: SafetyView } | { ok: false; error: string }>
+  bcReport(id: number): Promise<ReportView>
+  bcExportReport(id: number): Promise<string>
+  bcEraseContact(id: number): Promise<void>
+  onBroadcast(cb: (e: BroadcastEvent) => void): () => void
   listChats(): Promise<ChatSummary[]>
   getThread(chatId: string): Promise<FeedMessage[]>
   onMessage(cb: (m: FeedMessage) => void): () => void

@@ -59,6 +59,11 @@ export class ReplyPipeline extends EventEmitter {
     super()
   }
 
+  /** True while a customer's message is being processed or a reply is going out: broadcast yields to it. */
+  busy(): boolean {
+    return this.chains.size > 0 || this.inflight.size > 0
+  }
+
   start(): void {
     this.d.gateway.onMessage((m) => {
       this.handle(m).catch(() => undefined)

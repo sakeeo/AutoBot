@@ -37,7 +37,7 @@ function setup(over: { age?: number; start?: number; db?: Db } = {}) {
   const feed = new MessageFeed(db, clock)
   const conv = new ConversationStore(db, clock)
   const flags = { busy: false, connected: true }
-  const settings: SafetySettings = { enabled: true, ageDays: over.age ?? 365, declaredAt: clock.t, window: W, minGapDays: 7 }
+  const settings: SafetySettings = { enabled: true, ageDays: over.age ?? 365, declaredAt: clock.t, window: W, minGapDays: 7, warmupFrom: 0 }
   const engine = new BroadcastEngine({
     store, gateway, feed, conv, clock, rand: () => 0,
     isBusy: () => flags.busy, connected: () => flags.connected, settings: () => settings, businessName: () => 'Kopi Sudut'
@@ -183,6 +183,15 @@ describe('BroadcastEngine: daily limits and the send window', () => {
     await t.run(15 * 60_000, 5000, engine2)
     expect(t.gateway.sent).toHaveLength(22) // day 2 warm-up cap is 12
   }, 20_000)
+  it('starts the warm-up over when the user changed their number', async () => {
+    const t = setup()
+    t.warmedUp(4)
+    t.settings.warmupFrom = t.clock.t
+    t.people(14)
+    t.engine.start(t.campaign().id)
+    await t.run(20 * 60_000, 5000)
+    expect(t.gateway.sent).toHaveLength(10)
+  })
   it('does not send outside the send window, and starts when it opens', async () => {
     const t = setup({ start: at(22) })
     t.people(2)

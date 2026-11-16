@@ -565,3 +565,16 @@ describe('ReplyPipeline opt-out handling', () => {
   })
 })
 
+describe('ReplyPipeline.busy', () => {
+  it('is true while a message is being handled and false again afterwards', async () => {
+    const t = setup()
+    expect(t.pipeline.busy()).toBe(false)
+    let during = false
+    t.gateway.onSend = async () => { during = t.pipeline.busy() }
+    await t.pipeline.handle(t.msg())
+    expect(during).toBe(true)
+    await new Promise((r) => setTimeout(r, 0))
+    expect(t.pipeline.busy()).toBe(false)
+  })
+})
+

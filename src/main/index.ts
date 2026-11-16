@@ -20,6 +20,13 @@ import { registerIpc } from './ipc'
 import { createBrandHandlers } from './brand-ipc'
 import { MessageFeed } from './messages/message-feed'
 import { incomingNotification } from './notify'
+import { BroadcastStore } from './broadcast/store'
+import { BroadcastEngine } from './broadcast/engine'
+import { ImportService } from './broadcast/import'
+import { OptOutHandler } from './broadcast/optout-handler'
+import { createBroadcastHandlers, loadSafety } from './broadcast/ipc'
+import { syncChatContacts } from './broadcast/audience'
+import { normalizePhone } from './broadcast/identity'
 import { AuthStore } from './auth/auth-store'
 import { createAuthHandlers, lockAwareSend, redactWhenLocked, type AuthHandlers } from './auth/auth-ipc'
 import { createTray } from './tray'
@@ -124,6 +131,15 @@ function boot(): void {
   const agent = new ConversationAgent({ store, catalog, conv, handoff, gateway, clock })
 
   const feed = new MessageFeed(db, clock)
+  const bstore = new BroadcastStore(db, clock)
+  let engine!: BroadcastEngine
+  const optOut = new OptOutHandler({
+    store: bstore, clock,
+    wasBroadcastTo: (k) => bstore.wasSentTo(k),
+    reply: (chatId, text) => pipeline.reply(chatId, text),
+    isHumanHandling: (chatId) => conv.getState(chatId).status === 'manusia',
+    onSignal: (k) => engine.onSignal(k)
+  })
   const pipeline = new ReplyPipeline({
     gateway, store, settings, db,
     ai: currentProvider,
@@ -132,10 +148,24 @@ function boot(): void {
     conv,
     brand: () => brandStore.getActive(),
     agent,
-    feed
+    feed,
+    optOut
   })
 
   let status: ConnStatus = { state: 'disconnected' }
+  engine = new BroadcastEngine({
+    store: bstore, gateway, feed, conv, clock, rand: Math.random,
+    isBusy: () => pipeline.busy(),
+    connected: () => status.state === 'connected',
+    settings: () => loadSafety(bstore, Date.now()),
+    businessName: () => brandStore.getActive().identity.businessName.trim() || 'kami'
+  })
+  // People who must never receive a broadcast: the admins and the bot's own number.
+  const protectNumbers = (): void => {
+    for (const a of brandStore.getActive().admins) bstore.suppress({ number: normalizePhone(a.number), reason: 'admin' })
+    const me = gateway.selfNumber()
+    if (me) bstore.suppress({ number: me, reason: 'admin' })
+  }
   const rawSend = (channel: string, payload: unknown): void => {
     if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
   }
@@ -152,6 +182,7 @@ function boot(): void {
   }
   gateway.onStatus((s) => {
     status = s
+    if (s.state === 'connected') protectNumbers()
     send(C.evtStatus, s)
     tray?.refresh(STATUS_LABEL[s.state])
   })
@@ -180,6 +211,28 @@ function boot(): void {
       new Notification({ title: 'Pelanggan diserahkan ke admin', body: redactWhenLocked(isLocked, `${e.chatId.split('@')[0]} · ${e.reason}`, 'Buka aplikasi untuk melihat detail') }).show()
   })
   pipeline.on('feed_error', (e) => logger.warn({ err: e }, 'message feed failed'))
+  engine.on('progress', (e: { campaignId: number; antre: number; terkirim: number; gagal: number; dilewati: number }) =>
+    send(C.evtBroadcast, { type: 'progress', campaignId: e.campaignId, progress: { antre: e.antre, terkirim: e.terkirim, gagal: e.gagal, dilewati: e.dilewati } }))
+  engine.on('done', (e: { campaignId: number }) => send(C.evtBroadcast, { type: 'done', campaignId: e.campaignId }))
+  engine.on('paused', (e: { campaignId: number; reason: string }) => {
+    send(C.evtBroadcast, { type: 'paused', campaignId: e.campaignId, reason: e.reason })
+    try {
+      if (Notification.isSupported())
+        new Notification({ title: 'Broadcast dijeda', body: redactWhenLocked(isLocked, e.reason, 'Buka aplikasi untuk melihat alasannya') }).show()
+    } catch (err) {
+      logger.warn({ err }, 'broadcast notification failed')
+    }
+  })
+  engine.on('engine_error', (err) => logger.warn({ err }, 'broadcast engine failed'))
+  // Anything that was running when the app last closed comes back paused, never silently resumed.
+  engine.resetAfterRestart()
+  engine.startTimer()
+  protectNumbers()
+  const syncAudience = (): void => {
+    try { syncChatContacts(db, bstore, Date.now()) } catch (err) { logger.warn({ err }, 'broadcast audience sync failed') }
+  }
+  syncAudience()
+  setInterval(syncAudience, 10 * 60_000)
   pipeline.start()
 
   const restartIndexer = (): void => {
@@ -203,7 +256,14 @@ function boot(): void {
     () => rawSend(C.evtAuthLocked, null)
   )
 
+  const importer = new ImportService({ store: bstore, gateway, clock, sleep: (ms) => new Promise((r) => setTimeout(r, ms)) })
+  const broadcast = createBroadcastHandlers({
+    store: bstore, engine, importer, clock, isLocked,
+    businessName: () => brandStore.getActive().identity.businessName.trim() || 'kami'
+  })
+
   registerIpc({
+    broadcast,
     brandHandlers,
     auth: authHandlers,
     feed,

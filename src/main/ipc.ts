@@ -4,6 +4,7 @@ import type { Indexer } from './knowledge/indexer'
 import type { IndexStore } from './knowledge/index-store'
 import type { ReplyPipeline } from './pipeline/reply-pipeline'
 import type { MessageFeed } from './messages/message-feed'
+import type { BroadcastHandlers } from './broadcast/ipc'
 import type { SecretStore, SettingsStore } from './settings'
 import type { AiProvider } from './answer/ai-answerer'
 import type { WaGateway } from './wa/gateway'
@@ -31,12 +32,16 @@ export interface IpcDeps {
   brandHandlers: BrandHandlers
   auth: AuthHandlers
   feed: MessageFeed
+  broadcast: BroadcastHandlers
 }
+
+/** Channels that must work even while the app is locked: stopping a broadcast is never refused. */
+const ALWAYS_ALLOWED: ReadonlySet<string> = new Set([C.bcStopAll])
 
 export function registerIpc(d: IpcDeps): void {
   // Every channel goes through the lock gate; only auth:* channels work while locked.
   const handle = (channel: string, fn: (e: IpcMainInvokeEvent, ...a: any[]) => unknown): void =>
-    ipcMain.handle(channel, guardHandler(d.auth.isLocked, AUTH_CHANNELS.has(channel), fn))
+    ipcMain.handle(channel, guardHandler(d.auth.isLocked, AUTH_CHANNELS.has(channel) || ALWAYS_ALLOWED.has(channel), fn))
   handle(C.getStatus, () => d.getStatus())
   handle(C.connect, () => d.gateway.connect())
   handle(C.logout, () => d.gateway.logout())
@@ -114,6 +119,26 @@ export function registerIpc(d: IpcDeps): void {
       .all(LimitSchema.parse(limit)) as LogRow[]
   )
 
+  const bc = d.broadcast
+  handle(C.bcOverview, () => bc.bcOverview())
+  handle(C.bcContacts, (_e, f: unknown) => bc.bcContacts(f))
+  handle(C.bcSuppressed, () => bc.bcSuppressed())
+  handle(C.bcImportPreview, (_e, f: unknown) => bc.bcImportPreview(f))
+  handle(C.bcImportCommit, (_e, id: unknown, a: unknown) => bc.bcImportCommit(id, a))
+  handle(C.bcSendConfirmations, () => bc.bcSendConfirmations())
+  handle(C.bcCampaigns, () => bc.bcCampaigns())
+  handle(C.bcCreateCampaign, (_e, i: unknown) => bc.bcCreateCampaign(i))
+  handle(C.bcPreviewCampaign, (_e, id: unknown) => bc.bcPreviewCampaign(id))
+  handle(C.bcStartCampaign, (_e, id: unknown, t: unknown) => bc.bcStartCampaign(id, t))
+  handle(C.bcPauseCampaign, (_e, id: unknown) => bc.bcPauseCampaign(id))
+  handle(C.bcResumeCampaign, (_e, id: unknown) => bc.bcResumeCampaign(id))
+  handle(C.bcStopCampaign, (_e, id: unknown) => bc.bcStopCampaign(id))
+  handle(C.bcStopAll, () => bc.bcStopAll())
+  handle(C.bcGetSafety, () => bc.bcGetSafety())
+  handle(C.bcSetSafety, (_e, p: unknown) => bc.bcSetSafety(p))
+  handle(C.bcReport, (_e, id: unknown) => bc.bcReport(id))
+  handle(C.bcExportReport, (_e, id: unknown) => bc.bcExportReport(id))
+  handle(C.bcEraseContact, (_e, id: unknown) => bc.bcEraseContact(id))
   handle(C.listChats, () => d.feed.chats())
   handle(C.getThread, (_e, chatId: unknown) => d.feed.thread(ChatIdSchema.parse(chatId)))
   handle(C.getDashboard, () => buildDashboard(d.db, Date.now()))

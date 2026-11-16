@@ -18,6 +18,8 @@ export interface SafetySettings {
   declaredAt: number
   window: Window
   minGapDays: number
+  /** Warm-up counts only sends from this time on (reset when the user changes their number). */
+  warmupFrom: number
 }
 
 export interface EngineDeps {
@@ -192,7 +194,7 @@ export class BroadcastEngine extends EventEmitter {
       busy: this.d.isBusy(),
       tier: effectiveTier({ ageDays: s.ageDays, declaredAt: s.declaredAt }, now),
       window: s.window,
-      activeDay: activeDayIndex(counters.sendDays, localDay(now, s.window.timezone)),
+      activeDay: activeDayIndex(this.daysSince(counters.sendDays, s), localDay(now, s.window.timezone)),
       counters: {
         sentToday: counters.sentToday,
         sentThisHour: counters.sentThisHour,
@@ -206,6 +208,11 @@ export class BroadcastEngine extends EventEmitter {
       isSuppressed: (ct) => !!this.d.store.isSuppressed({ number: ct.number, jid: ct.jid }),
       contactHistory: this.d.store.contactHistory(contactId, now)
     }
+  }
+
+  private daysSince(days: string[], s: SafetySettings): string[] {
+    const from = localDay(s.warmupFrom, s.window.timezone)
+    return days.filter((d) => d >= from)
   }
 
   private checkBreaker(c: Campaign): void {
@@ -251,7 +258,7 @@ export class BroadcastEngine extends EventEmitter {
     }
     const tier = effectiveTier({ ageDays: s.ageDays, declaredAt: s.declaredAt }, now)
     const counters = store.counters(now, s.window.timezone)
-    const day0 = activeDayIndex(counters.sendDays, localDay(now, s.window.timezone))
+    const day0 = activeDayIndex(this.daysSince(counters.sendDays, s), localDay(now, s.window.timezone))
     let left = out.eligible
     let days = 0
     while (left > 0 && days < 365) {

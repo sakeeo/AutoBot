@@ -367,4 +367,38 @@ export class BroadcastStore {
         .get() as { n: number }
     ).n
   }
+
+  // ---- small state, lists and report rows ----
+
+  getState(k: string): string | null {
+    const r = this.db.prepare('SELECT v FROM broadcast_state WHERE k = ?').get(k) as { v: string } | undefined
+    return r ? r.v : null
+  }
+
+  setState(k: string, v: string): void {
+    this.db.prepare('INSERT INTO broadcast_state(k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v').run(k, v)
+  }
+
+  countByStatus(): Record<ContactStatus, number> {
+    const out: Record<ContactStatus, number> = { aktif: 0, menunggu_persetujuan: 0, tidak_aktif: 0 }
+    for (const r of this.db.prepare('SELECT status, COUNT(*) AS n FROM broadcast_contacts GROUP BY status').all() as { status: ContactStatus; n: number }[])
+      out[r.status] = r.n
+    return out
+  }
+
+  listContacts(f: { status?: ContactStatus; limit?: number } = {}): BContact[] {
+    const rows = f.status
+      ? (this.db.prepare('SELECT * FROM broadcast_contacts WHERE status = ? ORDER BY id DESC LIMIT ?').all(f.status, f.limit ?? 500) as Row[])
+      : (this.db.prepare('SELECT * FROM broadcast_contacts ORDER BY id DESC LIMIT ?').all(f.limit ?? 500) as Row[])
+    return rows.map(toContact)
+  }
+
+  reportRows(campaignId: number): { number: string | null; name: string; status: SendStatus; reason: string | null; at: number | null }[] {
+    return this.db
+      .prepare(
+        `SELECT c.number AS number, c.name AS name, s.status AS status, s.reason AS reason, s.sent_at AS at
+         FROM broadcast_sends s JOIN broadcast_contacts c ON c.id = s.contact_id WHERE s.campaign_id = ? ORDER BY s.id`
+      )
+      .all(campaignId) as { number: string | null; name: string; status: SendStatus; reason: string | null; at: number | null }[]
+  }
 }
