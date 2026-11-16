@@ -44,6 +44,7 @@ function createWindow(): BrowserWindow {
     height: 760,
     minWidth: 860,
     title: 'WA Otomation',
+    autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -54,6 +55,17 @@ function createWindow(): BrowserWindow {
   })
   // Any window created later (second launch after closing without a tray) must start locked too.
   authHandlers?.lock()
+  // No File/Edit/Window menu bar on any platform; the page has its own navigation.
+  w.removeMenu()
+  w.setMenuBarVisibility(false)
+  // Without the menu there are no accelerators, so development keeps DevTools on F12 / Ctrl+Shift+I.
+  if (!app.isPackaged)
+    w.webContents.on('before-input-event', (e, input) => {
+      if (input.type === 'keyDown' && (input.key === 'F12' || (input.control && input.shift && input.key.toUpperCase() === 'I'))) {
+        e.preventDefault()
+        w.webContents.toggleDevTools()
+      }
+    })
   w.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   w.webContents.on('will-navigate', (e) => e.preventDefault())
   if (process.env['ELECTRON_RENDERER_URL']) w.loadURL(process.env['ELECTRON_RENDERER_URL'])
@@ -211,7 +223,8 @@ if (!gotLock) {
   app.on('second-instance', () => showWindow())
   app.on('before-quit', () => { quitting = true })
   app.whenReady().then(() => {
-    if (app.isPackaged) Menu.setApplicationMenu(null)
+    // macOS always has a menu bar; keep only the app and Edit roles there so Cmd+Q / Cmd+C / Cmd+V keep working.
+    Menu.setApplicationMenu(process.platform === 'darwin' ? Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }]) : null)
     boot()
     win = createWindow()
   })

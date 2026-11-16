@@ -160,6 +160,7 @@ Opsional; aplikasi tetap berfungsi penuh dengan Mode Tanpa AI.
 - Navigasi: Dashboard, Uji Jawaban, Log, dan grup **Pengaturan** (Connector [WhatsApp, AI], Pengetahuan, Brand & Konversi [termasuk Perilaku balasan], Keamanan & Umum).
 - Dashboard: status WhatsApp/AI, angka hari ini dan 7 hari, chat menunggu admin, aktivitas terakhir, peringatan konfigurasi.
 - Tampilan mengikuti `docs/design-guide.md` (Rubick): sidebar biru, top bar dengan breadcrumb, kartu putih, Inter, konfirmasi sebelum hapus. Spec: `docs/superpowers/specs/2026-11-16-ui-rubick-design.md`.
+- Menu Pesan real-time (percakapan masuk, balasan bot, pesan admin), tombol tema terang/gelap di top bar, notifikasi desktop untuk setiap pesan masuk baru (dapat dimatikan; disamarkan saat terkunci), dan tanpa menu bar jendela. Spec: `docs/superpowers/specs/2026-11-16-inbox-theme-notify-design.md`.
 - Login aplikasi opsional (username + password, kode pemulihan, kunci otomatis). Hanya mengunci tampilan; bukan enkripsi data. Bot tetap berjalan saat terkunci. Lihat `docs/superpowers/specs/2026-11-16-settings-dashboard-login-design.md`.
 
 ## 6. Alur Pengguna Utama

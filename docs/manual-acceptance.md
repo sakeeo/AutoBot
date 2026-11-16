@@ -100,3 +100,21 @@ Acuan tunggal: `docs/design-guide.md`. Mode gelap adalah turunan (panduan hanya 
 | U10 | Putuskan jaringan atau matikan layanan lalu buka Dashboard dan Log. | Muncul pesan galat dengan tombol "Coba lagi", bukan layar kosong | ☐ |
 | U11 | Jalankan tanpa internet. | Font Inter tetap termuat (dibundel, tanpa CDN) | ☐ |
 
+## Tambahan: Pesan, tema, notifikasi, menu bar
+
+| # | Langkah | Hasil yang diharapkan | Lulus |
+|---|---|---|---|
+| P1 | Lihat top bar. | Tombol bulan/matahari tepat di sebelah kanan lonceng | ☐ |
+| P2 | Klik tombol tema berkali-kali, juga pada OS bermode gelap dan terang. | Tampilan langsung berganti terang ↔ gelap di semua halaman, tanpa memulai ulang; label tombol berganti | ☐ |
+| P3 | Pengaturan → Keamanan & Umum → Tema: pilih Terang, Gelap, Otomatis. | Langsung berlaku; Otomatis mengikuti OS dan berubah saat OS berganti tema | ☐ |
+| P4 | Tutup dan buka lagi aplikasi (juga saat login aktif). | Tema terakhir langsung dipakai, termasuk di layar kunci | ☐ |
+| P5 | Buka menu Pesan, kirim pesan dari nomor pelanggan. | Percakapan muncul/naik ke atas dan pesan masuk tampil tanpa memuat ulang; balasan bot menyusul di percakapan yang sama | ☐ |
+| P6 | Ketik balasan dari HP bot ke pelanggan. | Muncul di percakapan berlabel "Admin" | ☐ |
+| P7 | Kirim pesan dari grup, kirim stiker. | Grup berlabel "Grup"; stiker tampil "(pesan non-teks)" | ☐ |
+| P8 | Setiap pesan baru masuk. | Notifikasi desktop "Pesan dari <nomor>" berisi cuplikan teks; klik membuka aplikasi | ☐ |
+| P9 | Sambungkan ulang WhatsApp sehingga riwayat lama masuk. | Pesan lama tercatat di Pesan tetapi **tidak** memicu banjir notifikasi | ☐ |
+| P10 | Matikan "Notifikasi pesan masuk" di Keamanan & Umum, kirim pesan. | Tidak ada notifikasi; pesan tetap tampil di menu Pesan | ☐ |
+| P11 | Kunci aplikasi lalu kirim pesan. | Notifikasi hanya "Ada pesan baru" tanpa nomor dan isi; menu Pesan tidak menampilkan apa pun sampai dibuka kembali | ☐ |
+| P12 | Lihat bagian atas jendela di Windows/Linux, tekan Alt. | Tidak ada menu File/Edit/Window; Alt tidak memunculkannya. Salin/tempel di kolom input tetap berfungsi | ☐ |
+| P13 | Mode pengembangan: tekan F12 atau Ctrl+Shift+I. | DevTools terbuka; pada versi terpasang tidak terjadi apa pun | ☐ |
+
