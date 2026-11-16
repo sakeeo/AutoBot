@@ -1,2 +1,6 @@
 import { createRoot } from 'react-dom/client'
-createRoot(document.getElementById('root')!).render(<p>WA Otomation</p>)
+import 'bootstrap/dist/css/bootstrap.min.css'
+import 'bootstrap-icons/font/bootstrap-icons.css'
+import { App } from './App'
+
+createRoot(document.getElementById('root')!).render(<App />)
