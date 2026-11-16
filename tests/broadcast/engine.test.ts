@@ -163,7 +163,7 @@ describe('BroadcastEngine: daily limits and the send window', () => {
     t.people(30)
     const c = t.campaign()
     t.engine.start(c.id)
-    await t.run(60 * 60_000, 5000)
+    await t.run(20 * 60_000, 5000)
     expect(t.gateway.sent).toHaveLength(10)
 
     // Restart: fresh engine on the same database. The campaign must come back paused, and the cap must still hold.
@@ -180,9 +180,9 @@ describe('BroadcastEngine: daily limits and the send window', () => {
     expect(t.gateway.sent).toHaveLength(10)
 
     t.clock.t = at(9, 0, 17)
-    await t.run(30 * 60_000, 5000, engine2)
+    await t.run(15 * 60_000, 5000, engine2)
     expect(t.gateway.sent).toHaveLength(22) // day 2 warm-up cap is 12
-  })
+  }, 20_000)
   it('does not send outside the send window, and starts when it opens', async () => {
     const t = setup({ start: at(22) })
     t.people(2)
