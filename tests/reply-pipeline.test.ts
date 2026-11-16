@@ -5,6 +5,8 @@ import { join } from 'node:path'
 import { openDb } from '../src/main/db'
 import { IndexStore } from '../src/main/knowledge/index-store'
 import { SettingsStore } from '../src/main/settings'
+import { ConversationStore } from '../src/main/conversation/store'
+import { PRESETS } from '../src/shared/brand'
 import { ReplyPipeline } from '../src/main/pipeline/reply-pipeline'
 import type { WaGateway } from '../src/main/wa/gateway'
 import type { AiProvider } from '../src/main/answer/ai-answerer'
@@ -13,6 +15,8 @@ import type { ConnStatus, IncomingMessage } from '../src/shared/types'
 class FakeGateway implements WaGateway {
   sent: { chatId: string; text: string; typingMs?: number }[] = []
   fail = false
+  /** Runs inside sendText before the message counts as sent (to simulate events arriving mid-send). */
+  onSend: (() => Promise<void>) | null = null
   onMessage(): void {}
   onStatus(_cb: (s: ConnStatus) => void): void {}
   async connect(): Promise<void> {}
@@ -21,6 +25,7 @@ class FakeGateway implements WaGateway {
   jidFor(number: string): string { return `${number.replace(/\D/g, '')}@s.whatsapp.net` }
   async sendText(chatId: string, text: string, opts?: { typingMs?: number }): Promise<string | null> {
     if (this.fail) throw new Error('send failed')
+    if (this.onSend) await this.onSend()
     this.sent.push({ chatId, text, typingMs: opts?.typingMs })
     return `m-${this.sent.length}`
   }
@@ -37,19 +42,28 @@ function setup(opts: { ai?: AiProvider | null } = {}) {
   const gateway = new FakeGateway()
   const clock = { t: 1_700_000_000_000, now() { return this.t } }
   let rand = 0.5
+  const brand = structuredClone(PRESETS.kustom)
   const make = (database = db) =>
     new ReplyPipeline({
       gateway, store, settings, db: database,
       ai: () => opts.ai ?? null,
-      clock, rand: () => rand
+      clock, rand: () => rand,
+      conv: new ConversationStore(database, clock),
+      brand: () => brand
     })
   let n = 0
   const msg = (o: Partial<IncomingMessage> = {}): IncomingMessage => ({
     id: `m${++n}`, chatId: '6281@s.whatsapp.net', sender: '6281@s.whatsapp.net',
     isGroup: false, fromMe: false, text: 'berapa harga kopi?', timestamp: clock.now(), ...o
   })
-  return { db, store, settings, gateway, clock, pipeline: make(), make, msg, setRand: (r: number) => (rand = r) }
+  const pipeline = make()
+  return {
+    db, store, settings, gateway, clock, pipeline, make, msg, brand,
+    conv: new ConversationStore(db, clock), setRand: (r: number) => (rand = r)
+  }
 }
+
+const HOUR = 3_600_000
 
 describe('ReplyPipeline filters', () => {
   it('replies with a sourced answer when the folder has one', async () => {
@@ -119,6 +133,78 @@ describe('ReplyPipeline filters', () => {
     const t = setup()
     t.gateway.fail = true
     expect(await t.pipeline.handle(t.msg())).toMatchObject({ kind: 'error' })
+  })
+})
+
+describe('ReplyPipeline human takeover', () => {
+  const human = (t: ReturnType<typeof setup>, o: Partial<IncomingMessage> = {}) =>
+    t.msg({ fromMe: true, id: 'HUMAN-1', text: 'halo kak, saya admin', ...o })
+
+  it('pauses the chat for six hours when a message we did not send is typed from the phone', async () => {
+    const t = setup()
+    expect(await t.pipeline.handle(human(t))).toEqual({ kind: 'ignored', why: 'from_me' })
+    expect(t.conv.isPaused('6281@s.whatsapp.net')).toBe(true)
+    expect(t.conv.recentTurns('6281@s.whatsapp.net', 5)[0]).toMatchObject({ role: 'admin', text: 'halo kak, saya admin' })
+    expect(await t.pipeline.handle(t.msg())).toEqual({ kind: 'ignored', why: 'human' })
+    expect(t.gateway.sent).toHaveLength(0)
+  })
+  it('resumes answering after the pause expires', async () => {
+    const t = setup()
+    await t.pipeline.handle(human(t))
+    t.clock.t += 6 * HOUR + 60_000
+    expect(await t.pipeline.handle(t.msg())).toMatchObject({ kind: 'replied' })
+  })
+  it('uses the pause length from the brand profile', async () => {
+    const t = setup()
+    t.brand.limits.pauseHours = 1
+    await t.pipeline.handle(human(t))
+    t.clock.t += HOUR + 60_000
+    expect(await t.pipeline.handle(t.msg())).toMatchObject({ kind: 'replied' })
+  })
+  it('does not pause for the echo of a message the bot itself sent', async () => {
+    const t = setup()
+    await t.pipeline.handle(t.msg())
+    expect(t.gateway.sent).toHaveLength(1)
+    await t.pipeline.handle(t.msg({ fromMe: true, id: 'm-1', text: 'echo' }))
+    expect(t.conv.isPaused('6281@s.whatsapp.net')).toBe(false)
+  })
+  it('does not pause for messages typed in a group or on status broadcasts', async () => {
+    const t = setup()
+    await t.pipeline.handle(human(t, { isGroup: true, chatId: '1@g.us' }))
+    await t.pipeline.handle(human(t, { chatId: 'status@broadcast', id: 'H2' }))
+    expect(t.conv.isPaused('1@g.us')).toBe(false)
+    expect(t.conv.isPaused('status@broadcast')).toBe(false)
+  })
+  it('treats a non-text message typed by the human (photo, voice note) as a takeover too', async () => {
+    const t = setup()
+    await t.pipeline.handle(human(t, { text: null }))
+    expect(t.conv.isPaused('6281@s.whatsapp.net')).toBe(true)
+  })
+  it('does not send the bot answer when the human took over while it was still composing', async () => {
+    let release!: (s: string) => void
+    const slow: AiProvider = {
+      complete: () => new Promise<string>((r) => { release = r })
+    }
+    const t = setup({ ai: slow })
+    t.settings.update({ mode: 'ai' })
+    const pending = t.pipeline.handle(t.msg())
+    await new Promise((r) => setTimeout(r, 10))
+    await t.pipeline.handle(human(t))
+    release('{"answerable":true,"answer":"Kopi susu Rp25.000.","sources":["faq.md"]}')
+    expect(await pending).toEqual({ kind: 'ignored', why: 'human' })
+    expect(t.gateway.sent).toHaveLength(0)
+  })
+  it('an echo that arrives while the send is in flight is not mistaken for a human', async () => {
+    const t = setup()
+    t.gateway.onSend = async () => { await t.pipeline.handle(t.msg({ fromMe: true, id: 'm-1', text: 'echo' })) }
+    expect(await t.pipeline.handle(t.msg())).toMatchObject({ kind: 'replied' })
+    expect(t.conv.isPaused('6281@s.whatsapp.net')).toBe(false)
+  })
+  it('a different own message that arrives while the send is in flight pauses the chat afterwards', async () => {
+    const t = setup()
+    t.gateway.onSend = async () => { await t.pipeline.handle(human(t)) }
+    expect(await t.pipeline.handle(t.msg())).toMatchObject({ kind: 'replied' })
+    expect(t.conv.isPaused('6281@s.whatsapp.net')).toBe(true)
   })
 })
 

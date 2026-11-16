@@ -8,6 +8,8 @@ import { IndexStore } from './knowledge/index-store'
 import { Indexer } from './knowledge/indexer'
 import { ReplyPipeline } from './pipeline/reply-pipeline'
 import { BaileysGateway } from './wa/baileys-gateway'
+import { ConversationStore } from './conversation/store'
+import { BrandStore } from './brand-store'
 import type { AiProvider } from './answer/ai-answerer'
 import { makeProvider } from './answer/make-provider'
 import { secretNameFor } from '../shared/providers'
@@ -76,11 +78,17 @@ function boot(): void {
     return providerCache.provider
   }
 
+  const clock = { now: () => Date.now() }
+  const conv = new ConversationStore(db, clock)
+  const brandStore = new BrandStore(db, clock, () => ({ botNumber: gateway.selfNumber(), productCount: 0 }))
+
   const pipeline = new ReplyPipeline({
     gateway, store, settings, db,
     ai: currentProvider,
-    clock: { now: () => Date.now() },
-    rand: Math.random
+    clock,
+    rand: Math.random,
+    conv,
+    brand: () => brandStore.getActive()
   })
 
   let status: ConnStatus = { state: 'disconnected' }

@@ -7,9 +7,14 @@ import type { Answer, Decision, Hit, IncomingMessage } from '../../shared/types'
 import { decide } from '../answer/gate'
 import { buildExtractiveAnswer } from '../answer/extractive'
 import { AiError, askAi, type AiProvider } from '../answer/ai-answerer'
+import type { ConversationStore } from '../conversation/store'
+import type { BrandProfile } from '../../shared/brand'
 
 export type PipelineResult =
-  | { kind: 'ignored'; why: 'from_me' | 'no_text' | 'group' | 'status' | 'stale' | 'duplicate' | 'cooldown' }
+  | {
+      kind: 'ignored'
+      why: 'from_me' | 'no_text' | 'group' | 'status' | 'stale' | 'duplicate' | 'cooldown' | 'human'
+    }
   | { kind: 'replied'; sources: string[]; via: 'extractive' | 'ai' }
   | { kind: 'out_of_context'; action: 'reply' | 'silent' | 'escalate' }
   | { kind: 'error'; message: string }
@@ -22,7 +27,12 @@ export interface PipelineDeps {
   ai: () => AiProvider | null
   clock: { now(): number }
   rand: () => number
+  conv: ConversationStore
+  brand: () => BrandProfile
 }
+
+/** Thrown right before sending when a human took over the chat while the answer was being prepared. */
+class PausedError extends Error {}
 
 const STALE_MS = 2 * 60_000
 const TYPING_MIN_MS = 2000
@@ -31,6 +41,8 @@ const TOP_K = 5
 
 export class ReplyPipeline extends EventEmitter {
   private chains = new Map<string, Promise<unknown>>()
+  /** Own (fromMe) messages that arrived while a send to that chat was in flight. */
+  private inflight = new Map<string, IncomingMessage[]>()
 
   constructor(private d: PipelineDeps) {
     super()
@@ -44,6 +56,8 @@ export class ReplyPipeline extends EventEmitter {
 
   /** Handles one message. Messages of the same chat are processed strictly one after another. */
   handle(m: IncomingMessage): Promise<PipelineResult> {
+    // Our own messages never wait behind a customer message: a human may type while the bot is still composing.
+    if (m.fromMe) return Promise.resolve(this.handleOwn(m))
     const prev = this.chains.get(m.chatId) ?? Promise.resolve()
     const next = prev.then(() => this.run(m))
     const tail = next.catch(() => undefined)
@@ -52,6 +66,26 @@ export class ReplyPipeline extends EventEmitter {
       if (this.chains.get(m.chatId) === tail) this.chains.delete(m.chatId)
     })
     return next
+  }
+
+  /** A message sent from this account: the bot's own echo, or a human typing from the phone. */
+  private handleOwn(m: IncomingMessage): PipelineResult {
+    const ignored: PipelineResult = { kind: 'ignored', why: 'from_me' }
+    if (m.isGroup || m.chatId.endsWith('@broadcast')) return ignored
+    if (this.d.conv.isSentId(m.id)) return ignored
+    const pending = this.inflight.get(m.chatId)
+    if (pending) {
+      // Could be the echo of the message being sent right now; decided once sendText returns its id.
+      pending.push(m)
+      return ignored
+    }
+    this.takeover(m)
+    return ignored
+  }
+
+  private takeover(m: IncomingMessage): void {
+    this.d.conv.pauseFor(m.chatId, 'manusia', this.d.brand().limits.pauseHours)
+    this.d.conv.appendTurn(m.chatId, 'admin', m.text ?? '(pesan non-teks)')
   }
 
   private async run(m: IncomingMessage): Promise<PipelineResult> {
@@ -73,7 +107,10 @@ export class ReplyPipeline extends EventEmitter {
       top = out.top
       sources = out.sources
     } catch (e) {
-      result = { kind: 'error', message: (e as Error).message }
+      result =
+        e instanceof PausedError
+          ? { kind: 'ignored', why: 'human' }
+          : { kind: 'error', message: (e as Error).message }
     }
     this.d.db
       .prepare('UPDATE message_log SET decision = ?, top_score = ?, sources = ? WHERE message_id = ?')
@@ -89,11 +126,11 @@ export class ReplyPipeline extends EventEmitter {
       sources: [] as string[]
     })
 
-    if (m.fromMe) return ignored('from_me')
     if (m.chatId.endsWith('@broadcast')) return ignored('status')
     if (m.text === null || m.text.trim() === '') return ignored('no_text')
     if (m.isGroup && !s.allowGroups) return ignored('group')
     if (this.d.clock.now() - m.timestamp > STALE_MS) return ignored('stale')
+    if (this.d.conv.isPaused(m.chatId)) return ignored('human')
 
     const cd = this.d.db.prepare('SELECT last_at FROM cooldowns WHERE chat_id = ?').get(m.chatId) as
       | { last_at: number }
@@ -155,8 +192,20 @@ export class ReplyPipeline extends EventEmitter {
   }
 
   private async send(chatId: string, text: string): Promise<void> {
+    // The human may have taken over while the answer was being prepared.
+    if (this.d.conv.isPaused(chatId)) throw new PausedError()
     const typingMs = TYPING_MIN_MS + Math.floor(this.d.rand() * (TYPING_SPAN_MS + 1))
-    await this.d.gateway.sendText(chatId, text, { typingMs })
+    const pending: IncomingMessage[] = []
+    this.inflight.set(chatId, pending)
+    let sentId: string | null = null
+    try {
+      sentId = await this.d.gateway.sendText(chatId, text, { typingMs })
+      if (sentId) this.d.conv.rememberSentId(sentId)
+    } finally {
+      this.inflight.delete(chatId)
+    }
+    // Own messages seen during the send: ours (same id) or a human typing (different id).
+    for (const p of pending) if (p.id !== sentId) this.takeover(p)
     this.d.db
       .prepare(
         `INSERT INTO cooldowns(chat_id, last_at) VALUES (?, ?)
