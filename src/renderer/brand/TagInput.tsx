@@ -16,8 +16,10 @@ export function TagInput({ id, label, tags, onChange, placeholder }: {
         {tags.map((t) => (
           <span key={t} className="badge text-bg-secondary">
             {t}{' '}
-            <button type="button" className="btn-close btn-close-white ms-1" style={{ fontSize: 8 }}
-              aria-label={`Hapus ${t}`} onClick={() => onChange(tags.filter((x) => x !== t))} />
+            <button type="button" className="tag-remove" aria-label={`Hapus ${t}`}
+              onClick={() => onChange(tags.filter((x) => x !== t))}>
+              <i className="bi bi-x-lg" aria-hidden="true" />
+            </button>
           </span>
         ))}
       </div>

@@ -7,6 +7,9 @@ import { StatusBadge } from '../../src/renderer/ui/StatusBadge'
 import { LoadingState, EmptyState, ErrorState } from '../../src/renderer/ui/States'
 import { ConfirmButton } from '../../src/renderer/ui/ConfirmButton'
 import { DataTable } from '../../src/renderer/ui/DataTable'
+import { TagInput } from '../../src/renderer/brand/TagInput'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 afterEach(cleanup)
 
@@ -18,9 +21,10 @@ describe('PageHeader and Card', () => {
     expect(screen.getByText('Penjelasan')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Aksi' })).toBeTruthy()
   })
-  it('Card with a title is a named region with a header and a body', () => {
+  it('Card with a title is a named region with a level-3 heading, a header and a body', () => {
     render(<Card title="Hari ini" actions={<button>Unduh</button>}><p>isi</p></Card>)
     const region = screen.getByRole('region', { name: 'Hari ini' })
+    expect(within(region).getByRole('heading', { level: 3, name: 'Hari ini' })).toBeTruthy()
     expect(within(region).getByText('isi')).toBeTruthy()
     expect(within(region).getByRole('button', { name: 'Unduh' })).toBeTruthy()
   })
@@ -152,3 +156,39 @@ describe('DataTable', () => {
     expect(screen.getByText('Baris 1')).toBeTruthy()
   })
 })
+
+describe('ConfirmButton layout', () => {
+  const css = readFileSync(join(__dirname, '../../src/renderer/styles/ui.css'), 'utf8')
+  it('asking state is a popover that keeps the trigger footprint, so narrow table cells never overflow', () => {
+    const { container } = render(<ConfirmButton label="Hapus" ariaLabel="Hapus x" onConfirm={() => undefined} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Hapus x' }))
+    expect(container.querySelector('.confirm-wrap')).not.toBeNull()
+    expect(container.querySelector('.confirm-pop')).not.toBeNull()
+    const ghost = container.querySelector('.confirm-ghost')!
+    expect(ghost.getAttribute('aria-hidden')).toBe('true')
+    expect(ghost.getAttribute('tabindex')).toBe('-1')
+    const pop = css.slice(css.indexOf('.confirm-pop {'), css.indexOf('}', css.indexOf('.confirm-pop {')))
+    expect(pop).toMatch(/position:\s*absolute/)
+    expect(pop).toMatch(/white-space:\s*nowrap/)
+  })
+  it('focus returns to the trigger after confirming too', () => {
+    render(<ConfirmButton label="Hapus" onConfirm={() => undefined} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Hapus' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Hapus' }))
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Hapus' }))
+  })
+})
+
+describe('TagInput remove button', () => {
+  it('is a visible icon button (not a white close button on a light chip) with a usable target', () => {
+    render(<TagInput id="t" label="Kata" tags={['promo']} onChange={() => undefined} />)
+    const b = screen.getByRole('button', { name: 'Hapus promo' })
+    expect(b.className).toMatch(/tag-remove/)
+    expect(b.className).not.toMatch(/btn-close/)
+    const css = readFileSync(join(__dirname, '../../src/renderer/styles/ui.css'), 'utf8')
+    const rule = css.slice(css.indexOf('.tag-remove {'), css.indexOf('}', css.indexOf('.tag-remove {')))
+    expect(rule).toMatch(/color:\s*inherit/)
+    expect(Number(/width:\s*(\d+)px/.exec(rule)?.[1])).toBeGreaterThanOrEqual(20)
+  })
+})
+

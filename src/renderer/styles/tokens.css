@@ -42,6 +42,8 @@
   --color-info-text: #1D3F98;
   --color-neutral-soft: #EEF1F6;
   --color-neutral-text: #3E4A5E;
+  /* DERIVED: control border for checkboxes and switches; the guide border (1.1:1) leaves them invisible, WCAG 1.4.11 asks 3:1. */
+  --color-control-border: #7F8CA0;
   /* DERIVED: sidebar states (white at 16% over primary; text at 85% white). */
   --color-sidebar-active: #4766B6;
   --color-sidebar-hover: #2D54B4;
@@ -104,6 +106,7 @@
   --color-info-text: #A9C0F7;
   --color-neutral-soft: #222C44;
   --color-neutral-text: #C5CEDD;
+  --color-control-border: #7886A5;
   --color-sidebar-active: #3A5FB8;
   --color-sidebar-hover: #2B509E;
   --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.25);
@@ -142,6 +145,15 @@ code { color: var(--color-primary-text); font-size: 0.8125rem; }
 :focus-visible {
   outline: 2px solid var(--color-primary-text);
   outline-offset: 2px;
+}
+
+/* Bootstrap draws its own blue focus ring; replace every one with the token outline (§9, §10). */
+.form-control:focus, .form-select:focus {
+  outline: 2px solid var(--color-primary-text); outline-offset: 0; box-shadow: none;
+  background-color: var(--color-surface); color: var(--color-text-primary); border-color: var(--color-primary-text);
+}
+.btn:focus-visible, .nav-link:focus-visible, .btn-close:focus-visible, .form-check-input:focus {
+  outline: 2px solid var(--color-primary-text); outline-offset: 2px; box-shadow: none;
 }
 
 /* Cards (§7) */
@@ -207,6 +219,8 @@ code { color: var(--color-primary-text); font-size: 0.8125rem; }
 textarea.form-control { min-height: 72px; }
 .form-control::placeholder { color: var(--color-text-muted); opacity: 1; }
 .form-control:disabled, .form-select:disabled { background-color: var(--color-neutral-soft); color: var(--color-text-muted); }
+
+.form-check-input { background-color: var(--color-surface); border-color: var(--color-control-border); }
 .form-check-input:checked { background-color: var(--color-primary); border-color: var(--color-primary); }
 
 /* Badges & alerts (§7) */

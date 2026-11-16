@@ -170,4 +170,27 @@ describe('responsive drawer', () => {
     expect(screen.queryByRole('navigation', { name: 'Menu utama' })).toBeNull()
     expect(await screen.findByRole('heading', { name: /log/i })).toBeTruthy()
   })
+
+  it('the drawer is a modal dialog: labelled, aria-modal, focus moves in, the page behind is inert, Tab wraps', async () => {
+    narrow = true
+    setApi()
+    const { container } = render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Buka menu' }))
+    const dialog = screen.getByRole('dialog', { name: 'Menu utama' })
+    expect(dialog.getAttribute('aria-modal')).toBe('true')
+    const links = within(dialog).getAllByRole('button')
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true))
+    expect((document.activeElement as HTMLElement).textContent).toMatch(/dashboard/i)
+    expect(container.querySelector('.app-main')!.hasAttribute('inert')).toBe(true)
+    links[links.length - 1].focus()
+    fireEvent.keyDown(dialog, { key: 'Tab' })
+    expect(document.activeElement).toBe(links[0])
+    links[0].focus()
+    fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true })
+    expect(document.activeElement).toBe(links[links.length - 1])
+    fireEvent.keyDown(document, { key: 'Escape' })
+    await waitFor(() => expect(container.querySelector('.app-main')!.hasAttribute('inert')).toBe(false))
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Buka menu' }))
+  })
 })
+

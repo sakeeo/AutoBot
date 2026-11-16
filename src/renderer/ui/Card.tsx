@@ -12,7 +12,7 @@ export function Card({ title, actions, children, className, ...rest }: {
     <section className={`card${className ? ` ${className}` : ''}`} aria-label={label}>
       {(title || actions) && (
         <div className="card-header d-flex align-items-center justify-content-between gap-2">
-          <span>{title}</span>
+          {title ? <h3 className="card-title">{title}</h3> : <span />}
           {actions}
         </div>
       )}

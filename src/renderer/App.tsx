@@ -81,10 +81,13 @@ function Shell() {
     return () => mq.removeEventListener('change', on)
   }, [settings?.theme])
 
-  const closeDrawer = useCallback(() => {
-    setDrawerOpen(false)
-    menuRef.current?.focus()
-  }, [])
+  const closeDrawer = useCallback(() => setDrawerOpen(false), [])
+  // The page behind a modal drawer is inert, so focus goes back to the menu button only after it re-enables.
+  const wasOpen = useRef(false)
+  useEffect(() => {
+    if (wasOpen.current && !drawerOpen) menuRef.current?.focus()
+    wasOpen.current = drawerOpen
+  }, [drawerOpen])
   useEffect(() => {
     if (!drawerOpen) return
     const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') closeDrawer() }
@@ -112,7 +115,7 @@ function Shell() {
           {sidebar(true)}
         </>
       )}
-      <div className="app-main">
+      <div className="app-main" inert={drawerOpen}>
         <TopBar crumbs={crumbsOf(page)} showMenuButton={narrow} onMenu={() => setDrawerOpen(true)} menuRef={menuRef}
           onGoDashboard={() => select('dashboard')} onGoSecurity={() => select('security')} />
         <main className="app-content">{current.view}</main>

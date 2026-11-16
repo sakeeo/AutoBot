@@ -97,6 +97,27 @@ describe('design tokens (design-guide §11)', () => {
         expect(contrast(t[`--color-${k}-soft`], t[`--color-${k}-text`]), `${k} soft on text`).toBeGreaterThanOrEqual(4.5)
   })
 
+  it('has a derived control-border token that reaches 3:1 (WCAG 1.4.11) and is used by checkboxes and switches', () => {
+    expect(tokens).toMatch(/DERIVED[^\n]*control border/i)
+    for (const t of [light, { ...light, ...dark }])
+      for (const bg of [t['--color-surface'], t['--color-background']])
+        expect(contrast(t['--color-control-border'], bg), `control border on ${bg}`).toBeGreaterThanOrEqual(3)
+    const rule = tokens.slice(tokens.indexOf('\n.form-check-input {'), tokens.indexOf('}', tokens.indexOf('\n.form-check-input {')))
+    expect(rule).toMatch(/border-color:\s*var\(--color-control-border\)/)
+  })
+
+  it('overrides every Bootstrap focus style with the token outline and keeps inputs on the surface colour', () => {
+    const rules = [...tokens.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^}]*)\}/g)].map((m) => ({ sel: m[1], body: m[2] }))
+    for (const sel of ['.btn:focus-visible', '.nav-link:focus-visible', '.form-check-input:focus', '.form-control:focus', '.form-select:focus']) {
+      const hit = rules.find((r) => r.sel.split(',').map((s) => s.trim()).includes(sel))
+      expect(hit, sel).toBeDefined()
+      expect(hit!.body, sel).toMatch(/outline:\s*2px solid var\(--color-primary-text\)/)
+      expect(hit!.body, sel).toMatch(/box-shadow:\s*none/)
+    }
+    const input = rules.find((r) => r.sel.split(',').map((s) => s.trim()).includes('.form-control:focus'))!
+    expect(input.body).toMatch(/background-color:\s*var\(--color-surface\)/)
+  })
+
   it('shows a visible keyboard focus indicator', () => {
     expect(tokens).toMatch(/:focus-visible\s*\{[^}]*outline:\s*2px solid/)
   })

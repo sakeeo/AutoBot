@@ -73,3 +73,5 @@
 /* Submenu entries carry no icon so the longest label fits the 220 px sidebar on one line. */
 .sidebar-sub .sidebar-link i { display: none; }
 .sidebar-sub { margin-left: var(--space-4); }
+
+.sidebar-nav { display: flex; flex-direction: column; gap: var(--space-1); }
