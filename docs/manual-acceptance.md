@@ -118,3 +118,28 @@ Acuan tunggal: `docs/design-guide.md`. Mode gelap adalah turunan (panduan hanya 
 | P12 | Lihat bagian atas jendela di Windows/Linux, tekan Alt. | Tidak ada menu File/Edit/Window; Alt tidak memunculkannya. Salin/tempel di kolom input tetap berfungsi | ☐ |
 | P13 | Mode pengembangan: tekan F12 atau Ctrl+Shift+I. | DevTools terbuka; pada versi terpasang tidak terjadi apa pun | ☐ |
 
+## Tambahan: Broadcast aman
+
+Gunakan **nomor sekunder** dan nomor teman yang setuju diuji. Acuan: `docs/superpowers/specs/2026-11-16-broadcast-aman-design.md`.
+
+| # | Langkah | Hasil yang diharapkan | Lulus |
+|---|---|---|---|
+| B-1 | Broadcast → Kampanye → Buat kampanye sebelum membuka tab Keamanan. | Kampanye bisa dibuat, tetapi Mulai ditolak dengan pesan "Lengkapi dan aktifkan pengaturan keamanan" | ☐ |
+| B-2 | Keamanan → nyatakan usia nomor → Simpan dan aktifkan. | Tingkat tampil; setelah itu tidak ada cara menaikkan tingkat; "Saya mengganti nomor" meminta konfirmasi | ☐ |
+| B-3 | Penerima → Impor daftar (CSV `nomor,nama`, 3 nomor valid + 1 salah + 1 tak terdaftar di WA). | Pratinjau menghitung valid/tidak valid; tombol Impor mati sampai pernyataan dicentang dan keterangan sumber ≥ 10 karakter; nomor tak terdaftar dibuang dan masuk daftar tolak | ☐ |
+| B-4 | Impor daftar yang >30% nomornya tidak terdaftar. | Impor dihentikan dengan peringatan kualitas daftar; tidak ada kontak tersimpan | ☐ |
+| B-5 | Kirim konfirmasi ke kontak impor. | Pesan konfirmasi terkirim hanya setelah tombol ditekan, memuat nama bisnis dan kalimat "Balas BERHENTI…" | ☐ |
+| B-6 | Dari nomor impor, balas "ya". | Status berubah ke Aktif dan kini ikut kampanye broadcast | ☐ |
+| B-7 | Buat kampanye ke kontak chat; di tengah jalan, dari nomor penerima ketik "BERHENTI". | Pengiriman berikutnya ke nomor itu berhenti < 5 detik (dilewati: "Ada di daftar tolak"), balasan konfirmasi terkirim sekali, bot tidak menjawab pesan itu | ☐ |
+| B-8 | Dari orang yang belum pernah dikirimi broadcast, ketik "stop". | Bot tetap menjawab seperti biasa; orang itu tidak akan dikirimi broadcast kelak | ☐ |
+| B-9 | Ketik kalimat panjang yang memuat "stop" ("jangan stop dulu ya"). | Tidak dianggap berhenti berlangganan | ☐ |
+| B-10 | Mulai kampanye > 50 penerima. | Mulai mati sampai mengetik KIRIM | ☐ |
+| B-11 | Amati pengiriman. | Jeda 20–60 detik; jeda 3–8 menit tiap 10 pesan; tidak lebih dari batas hari ini; tidak ada kiriman di luar jam 09:00–20:00 | ☐ |
+| B-12 | Putuskan internet saat kampanye berjalan, lalu sambungkan lagi. | Kampanye dijeda dengan alasan dan notifikasi, **tidak** lanjut sendiri | ☐ |
+| B-13 | Tutup dan buka aplikasi saat kampanye berjalan. | Kampanye kembali ke Dijeda; penghitung hari ini tetap (tidak mengulang kuota) | ☐ |
+| B-14 | Tekan "Hentikan semua", juga saat aplikasi terkunci. | Semua kampanye dihentikan; tidak ada pengiriman lagi | ☐ |
+| B-15 | Kunci aplikasi saat kampanye berjalan. | Kampanye tetap berjalan; memulai/mengubah kampanye ditolak sampai dibuka | ☐ |
+| B-16 | Ekspor CSV laporan dengan nama penerima `=1+1` dan `+62…`. | Sel diawali tanda kutip tunggal; tidak dihitung sebagai rumus di spreadsheet | ☐ |
+| B-17 | Setelah broadcast terkirim, lihat balasan WhatsApp-nya di Pesan. | Pesan tampil sebagai balasan bot; chat itu **tidak** diambil alih manusia (bot tidak terjeda) | ☐ |
+| B-18 | Hapus data kontak yang pernah berhenti, lalu impor ulang nomornya. | Nomor tetap ditolak (catatan berhash) | ☐ |
+

@@ -134,6 +134,7 @@ Opsional; aplikasi tetap berfungsi penuh dengan Mode Tanpa AI.
 - Laporan: terkirim, gagal, dibaca (jika tersedia), ekspor CSV.
 - Validasi nomor terdaftar WhatsApp (`onWhatsApp`) sebelum kirim.
 - Opt-out: kontak yang membalas "STOP" otomatis masuk daftar blokir broadcast.
+- Rancangan keamanan terperinci (persetujuan penerima, tingkat nomor, pemanasan, pemutus sirkuit): `docs/superpowers/specs/2026-11-16-broadcast-aman-design.md`.
 
 ### 5.4 Kotak Masuk / Chat Viewer (P1)
 - Daftar percakapan, riwayat pesan, balas manual dari UI.
