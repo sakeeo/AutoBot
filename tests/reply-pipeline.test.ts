@@ -12,6 +12,8 @@ import { ConversationAgent } from '../src/main/pipeline/conversation-agent'
 import { PRESETS } from '../src/shared/brand'
 import { ReplyPipeline } from '../src/main/pipeline/reply-pipeline'
 import { MessageFeed } from '../src/main/messages/message-feed'
+import { BroadcastStore } from '../src/main/broadcast/store'
+import { OptOutHandler } from '../src/main/broadcast/optout-handler'
 import type { WaGateway } from '../src/main/wa/gateway'
 import type { AiProvider } from '../src/main/answer/ai-answerer'
 import type { ConnStatus, IncomingMessage } from '../src/shared/types'
@@ -506,6 +508,57 @@ describe('ReplyPipeline with a failing message feed', () => {
     t.pipeline.on('feed_error', (e) => seen.push(e))
     await t.pipeline.handle(t.msg())
     expect(seen.length).toBeGreaterThan(0)
+  })
+})
+
+describe('ReplyPipeline opt-out handling', () => {
+  function withOptOut(wasBroadcastTo: boolean, ai: AiProvider | null = null) {
+    const t = setup({ ai })
+    const conv = new ConversationStore(t.db, t.clock)
+    const store = new BroadcastStore(t.db, t.clock)
+    let pipeline!: ReplyPipeline
+    const optOut = new OptOutHandler({
+      store, clock: t.clock, wasBroadcastTo: () => wasBroadcastTo,
+      reply: (chatId, text) => pipeline.reply(chatId, text), isHumanHandling: (c) => conv.getState(c).status === 'manusia',
+      onSignal: () => undefined
+    })
+    pipeline = new ReplyPipeline({
+      gateway: t.gateway, store: t.store, settings: t.settings, db: t.db, ai: () => ai, clock: t.clock,
+      rand: () => 0.5, conv, brand: () => t.brand, optOut,
+      agent: new ConversationAgent({ store: t.store, catalog: new CatalogStore(t.db), conv,
+        handoff: new HandoffService({ gateway: t.gateway, conv, clock: t.clock }), gateway: t.gateway, clock: t.clock })
+    })
+    return { ...t, conv, bstore: store, pipeline }
+  }
+
+  it('BERHENTI from a broadcast recipient never reaches the agent or the AI, and is logged as opt_out', async () => {
+    const ai = scripted([agentOut()])
+    const t = withOptOut(true, ai.provider)
+    t.settings.update({ mode: 'ai' })
+    const r = await t.pipeline.handle(t.msg({ text: 'BERHENTI' }))
+    expect(r).toEqual({ kind: 'ignored', why: 'opt_out' })
+    expect(ai.calls).toHaveLength(0)
+    expect(t.db.prepare('SELECT decision FROM message_log').get()).toEqual({ decision: 'ignored:opt_out' })
+    expect(t.bstore.isSuppressed({ jid: '6281@s.whatsapp.net' })?.reason).toBe('berhenti')
+    expect(t.gateway.sent.map((s) => s.text)).toEqual([expect.stringMatching(/tidak akan menerima/i)])
+  })
+  it('stop from someone never broadcast to is only noted; the bot answers as usual', async () => {
+    const t = withOptOut(false)
+    const r = await t.pipeline.handle(t.msg({ text: 'stop' }))
+    expect(r).not.toEqual({ kind: 'ignored', why: 'opt_out' })
+    expect(t.bstore.isSuppressed({ jid: '6281@s.whatsapp.net' })?.reason).toBe('tolak_lunak')
+    expect(t.gateway.sent.some((s) => /tidak akan menerima/i.test(s.text))).toBe(false)
+  })
+  it('records the opt-out even while a human is handling the chat, without sending a confirmation', async () => {
+    const t = withOptOut(true)
+    await t.pipeline.handle(t.msg({ fromMe: true, id: 'HUMAN-1', text: 'saya admin' }))
+    await t.pipeline.handle(t.msg({ text: 'stop' }))
+    expect(t.bstore.isSuppressed({ jid: '6281@s.whatsapp.net' })?.reason).toBe('berhenti')
+    expect(t.gateway.sent).toHaveLength(0)
+  })
+  it('ordinary questions are unaffected', async () => {
+    const t = withOptOut(true)
+    expect(await t.pipeline.handle(t.msg())).toMatchObject({ kind: 'replied', via: 'extractive' })
   })
 })
 

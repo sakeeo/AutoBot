@@ -11,13 +11,14 @@ import type { ConversationStore } from '../conversation/store'
 import { splitBubbles, typingMsFor } from '../conversation/bubbles'
 import type { ConversationAgent, AgentTurnResult } from './conversation-agent'
 import type { MessageFeed } from '../messages/message-feed'
+import type { OptOutHandler } from '../broadcast/optout-handler'
 import type { BrandProfile } from '../../shared/brand'
 import type { Settings } from '../../shared/types'
 
 export type PipelineResult =
   | {
       kind: 'ignored'
-      why: 'from_me' | 'no_text' | 'group' | 'status' | 'stale' | 'duplicate' | 'cooldown' | 'human' | 'rate_limit'
+      why: 'from_me' | 'no_text' | 'group' | 'status' | 'stale' | 'duplicate' | 'cooldown' | 'human' | 'rate_limit' | 'opt_out'
     }
   | { kind: 'replied'; sources: string[]; via: 'extractive' | 'ai'; linkSent?: string | null }
   | { kind: 'out_of_context'; action: 'reply' | 'silent' | 'escalate' }
@@ -37,6 +38,8 @@ export interface PipelineDeps {
   agent: ConversationAgent
   /** Records and announces every message; optional so older wiring and tests keep working. */
   feed?: MessageFeed
+  /** Stop/start handling for broadcast; runs before the agent. Optional so older wiring keeps working. */
+  optOut?: OptOutHandler
 }
 
 /** Thrown right before sending when a human took over the chat while the answer was being prepared. */
@@ -149,6 +152,8 @@ export class ReplyPipeline extends EventEmitter {
     if (m.text === null || m.text.trim() === '') return ignored('no_text')
     if (m.isGroup && !s.allowGroups) return ignored('group')
     if (this.d.clock.now() - m.timestamp > STALE_MS) return ignored('stale')
+    // Opt-outs are recorded even while a human is handling the chat, so this runs before the pause check.
+    if (this.d.optOut && (await this.d.optOut.handle(m))) return ignored('opt_out')
     if (this.d.conv.isPaused(m.chatId)) return ignored('human')
 
     // AI mode: the conversation agent answers. It has no per-contact cooldown (customers send several
@@ -230,6 +235,11 @@ export class ReplyPipeline extends EventEmitter {
     if (action === 'reply') await this.send(m.chatId, replyText)
     else if (action === 'escalate') this.emit('escalate', m)
     return { result: { kind: 'out_of_context', action } as PipelineResult, top, sources: [] as string[] }
+  }
+
+  /** A system reply (e.g. the unsubscribe confirmation): recorded in the feed and never mistaken for a human. */
+  reply(chatId: string, text: string): Promise<void> {
+    return this.send(chatId, text)
   }
 
   private async send(chatId: string, text: string, typing?: number): Promise<void> {
