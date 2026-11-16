@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react'
 import { App } from '../../src/renderer/App'
 import { PRESETS } from '../../src/shared/brand'
 import type { Settings } from '../../src/shared/types'
@@ -15,6 +15,8 @@ const period = { replied: 0, refused: 0, handoff: 0, errors: 0, links: 0 }
 function setApi() {
   const draft = structuredClone(PRESETS.toko_online)
   const api = {
+    listChats: vi.fn().mockResolvedValue([]), getThread: vi.fn().mockResolvedValue([]),
+    onMessage: vi.fn().mockReturnValue(() => undefined),
     onAuthLocked: vi.fn().mockReturnValue(() => undefined),
     authState: vi.fn().mockResolvedValue({ enabled: false, locked: false, username: null, autoLockMin: 0 }),
     getStatus: vi.fn().mockResolvedValue({ state: 'disconnected' }),
@@ -104,4 +106,14 @@ describe('navigation', () => {
     fireEvent.change(screen.getByLabelText(/tema/i), { target: { value: 'dark' } })
     await waitFor(() => expect(api.updateSettings).toHaveBeenCalledWith({ theme: 'dark' }))
   })
+
+  it('has a Pesan entry between Dashboard and Uji Jawaban that opens the live messages page', async () => {
+    render(<App />)
+    const nav = await screen.findByRole('navigation', { name: 'Menu utama' })
+    const names = within(nav).getAllByRole('button').map((b) => b.textContent?.trim())
+    expect(names.slice(0, 4)).toEqual(['Dashboard', 'Pesan', 'Uji Jawaban', 'Log'])
+    fireEvent.click(within(nav).getByRole('button', { name: 'Pesan' }))
+    expect(await screen.findByRole('heading', { level: 2, name: 'Pesan' })).toBeTruthy()
+  })
 })
+

@@ -52,3 +52,24 @@
 .tag-remove:hover { background: var(--color-border); }
 
 .card-header .card-title { margin: 0; font-size: 0.9375rem; font-weight: 600; }
+
+/* Messages page */
+.chat-list { list-style: none; margin: 0; padding: 0; max-height: 560px; overflow-y: auto; }
+.chat-row {
+  display: flex; flex-direction: column; gap: var(--space-1); width: 100%; padding: var(--space-3);
+  border: 0; border-bottom: 1px solid var(--color-border); background: transparent; color: var(--color-text-primary); text-align: left;
+}
+.chat-row:hover { background: var(--color-primary-light); }
+.chat-row[aria-current="true"] { background: var(--color-primary-light); box-shadow: inset 3px 0 0 var(--color-primary); }
+.chat-top { display: flex; align-items: center; gap: var(--space-2); }
+.chat-name { font-weight: 600; font-size: 0.8125rem; }
+.chat-time { margin-left: auto; color: var(--color-text-muted); font-size: 0.75rem; }
+.chat-preview { color: var(--color-text-muted); font-size: 0.8125rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-count { color: var(--color-text-muted); font-size: 0.75rem; }
+
+.thread-box { display: flex; flex-direction: column; gap: var(--space-3); height: min(60vh, 560px); overflow-y: auto; padding-right: var(--space-2); }
+.bubble { max-width: 80%; padding: var(--space-2) var(--space-3); border-radius: var(--radius-card); font-size: 0.8125rem; }
+.bubble-meta { display: flex; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-1); font-size: 0.75rem; font-weight: 600; }
+.bubble-in { align-self: flex-start; background: var(--color-neutral-soft); color: var(--color-neutral-text); }
+.bubble-out { align-self: flex-end; background: var(--color-primary); color: var(--color-on-primary); }
+.bubble-human { align-self: flex-end; background: var(--color-info-soft); color: var(--color-info-text); }

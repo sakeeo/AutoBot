@@ -2,6 +2,7 @@ export const id = {
   appName: 'WA Otomation',
   nav: {
     dashboard: 'Dashboard',
+    messages: 'Pesan',
     test: 'Uji Jawaban',
     log: 'Log',
     settings: 'Pengaturan',
