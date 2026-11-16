@@ -182,6 +182,7 @@ describe('security page', () => {
 
     type(/password untuk menonaktifkan/i, 'baru-baru-1')
     fireEvent.click(screen.getByRole('button', { name: /nonaktifkan login/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ya, nonaktifkan' }))
     await waitFor(() => expect(api.authDisable).toHaveBeenCalledWith('baru-baru-1'))
 
     fireEvent.click(screen.getByRole('button', { name: /kunci sekarang/i }))

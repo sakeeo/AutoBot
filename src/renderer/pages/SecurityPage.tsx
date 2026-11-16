@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import { useSettings } from '../useSettings'
 import { useAuth } from '../auth-context'
+import { Card } from '../ui/Card'
+import { ConfirmButton } from '../ui/ConfirmButton'
+import { PageHeader } from '../ui/PageHeader'
 
 function GeneralSection() {
   const [settings, patch] = useSettings()
   if (!settings) return null
   return (
-    <section className="mb-4" style={{ maxWidth: 480 }}>
-      <h3 className="h5 mb-3">Umum</h3>
+    <Card title="Umum" className="mb-3" aria-label="Umum">
       <div className="mb-3">
         <label htmlFor="theme" className="form-label">Tema</label>
         <select id="theme" className="form-select" value={settings.theme}
@@ -22,7 +24,7 @@ function GeneralSection() {
           checked={settings.autoStart} onChange={(e) => patch({ autoStart: e.target.checked })} />
         <label htmlFor="autostart" className="form-check-label">Jalankan saat login</label>
       </div>
-    </section>
+    </Card>
   )
 }
 
@@ -73,8 +75,7 @@ function LoginSection() {
   }
 
   return (
-    <section className="mb-4" style={{ maxWidth: 480 }}>
-      <h3 className="h5 mb-3">Login aplikasi</h3>
+    <Card title="Login aplikasi" className="mb-3" aria-label="Login aplikasi">
 
       {recovery && (
         <div className="alert alert-warning">
@@ -150,7 +151,8 @@ function LoginSection() {
             <input id="dis-pass" type="password" className="form-control" value={disablePass}
               onChange={(e) => setDisablePass(e.target.value)} />
           </div>
-          <button type="button" className="btn btn-outline-danger" onClick={disable}>Nonaktifkan login</button>
+          <ConfirmButton label="Nonaktifkan login" confirmLabel="Ya, nonaktifkan" className="btn btn-outline-danger"
+            onConfirm={disable} />
           <Notice msg={disableMsg} />
         </>
       )}
@@ -160,14 +162,14 @@ function LoginSection() {
         Login hanya mengunci tampilan aplikasi, bukan mengenkripsi data di komputer ini. Bot tetap berjalan saat
         aplikasi terkunci.
       </p>
-    </section>
+    </Card>
   )
 }
 
 export function SecurityPage() {
   return (
     <div>
-      <h2 className="h4 mb-3"><i className="bi bi-shield-lock me-2" />Keamanan & Umum</h2>
+      <PageHeader icon="bi-shield-lock" title="Keamanan & Umum" subtitle="Login aplikasi, tema, dan pengaturan umum." />
       <LoginSection />
       <GeneralSection />
     </div>

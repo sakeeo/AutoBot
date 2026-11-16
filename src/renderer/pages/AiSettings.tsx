@@ -1,3 +1,6 @@
+import { ConfirmButton } from '../ui/ConfirmButton'
+import { PageHeader } from '../ui/PageHeader'
+import { StatusBadge } from '../ui/StatusBadge'
 import { useEffect, useState } from 'react'
 import { useSettings } from '../useSettings'
 import { PROVIDER_IDS, PROVIDERS, type ProviderId } from '../../shared/providers'
@@ -48,11 +51,8 @@ export function AiSettings() {
 
   return (
     <div style={{ maxWidth: 640 }}>
-      <h2 className="h4 mb-3"><i className="bi bi-stars me-2" />Connector AI (BYOK)</h2>
-      <p className="text-body-secondary">
-        Opsional. Tanpa AI, bot membalas dengan kutipan dokumen. Dengan AI, jawaban disusun hanya dari
-        potongan dokumen yang relevan. Anda memakai API key sendiri; biaya token ditanggung Anda.
-      </p>
+      <PageHeader icon="bi-stars" title="Connector AI (BYOK)"
+        subtitle="Opsional. Tanpa AI, bot membalas dengan kutipan dokumen. Dengan AI, jawaban disusun hanya dari potongan dokumen yang relevan. Anda memakai API key sendiri; biaya token ditanggung Anda." />
 
       {settings && (
         <div className="mb-3">
@@ -89,7 +89,7 @@ export function AiSettings() {
                 <i className="bi bi-box-arrow-up-right me-1" />Hubungkan ke {providerId === 'claude' ? 'Claude' : provider.label}
               </button>
             )}
-            {hasKey && <span className="badge text-bg-success">Key tersimpan</span>}
+            {hasKey && <StatusBadge tone="success">Key tersimpan</StatusBadge>}
           </div>
           <label htmlFor="api-key" className="form-label">API key</label>
           <div className="input-group">
@@ -98,12 +98,12 @@ export function AiSettings() {
               value={key} onChange={(e) => setKey(e.target.value)} />
             <button className="btn btn-primary" disabled={busy || !key.trim()} onClick={save}>Uji & simpan</button>
             {hasKey && (
-              <button className="btn btn-outline-danger" onClick={remove} aria-label="Hapus key">
-                <i className="bi bi-trash" />
-              </button>
+              <ConfirmButton label="Hapus" ariaLabel="Hapus key" className="btn btn-outline-danger" onConfirm={remove}>
+                <i className="bi bi-trash" aria-hidden="true" />
+              </ConfirmButton>
             )}
           </div>
-          {error && <div className="text-danger small mt-2">{error}</div>}
+          {error && <div className="text-danger small mt-2" role="alert">{error}</div>}
           <div className="form-text">
             Key disimpan terenkripsi di penyimpanan aman sistem operasi dan tidak pernah ditampilkan kembali.
           </div>

@@ -73,7 +73,8 @@ describe('ConnectionPage', () => {
   it('shows the connected state with a logout button', async () => {
     const api = setApi({ getStatus: vi.fn().mockResolvedValue({ state: 'connected' }) })
     render(<ConnectionPage />)
-    fireEvent.click(await screen.findByRole('button', { name: /logout/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /keluar dari whatsapp/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ya, keluar' }))
     expect(api.logout).toHaveBeenCalled()
   })
 })

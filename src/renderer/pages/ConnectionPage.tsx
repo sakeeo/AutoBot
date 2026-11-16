@@ -1,23 +1,34 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import QRCode from 'qrcode'
 import type { ConnStatus } from '../../shared/types'
 import { id } from '../i18n/id'
+import { Card } from '../ui/Card'
+import { ConfirmButton } from '../ui/ConfirmButton'
+import { PageHeader } from '../ui/PageHeader'
+import { ErrorState } from '../ui/States'
+import { StatusBadge, type Tone } from '../ui/StatusBadge'
 
-const BADGE: Record<ConnStatus['state'], string> = {
-  disconnected: 'text-bg-secondary',
-  connecting: 'text-bg-warning',
-  waiting_qr: 'text-bg-warning',
-  connected: 'text-bg-success'
+const TONE: Record<ConnStatus['state'], Tone> = {
+  disconnected: 'neutral',
+  connecting: 'warning',
+  waiting_qr: 'warning',
+  connected: 'success'
 }
 
 export function ConnectionPage() {
   const [status, setStatus] = useState<ConnStatus>({ state: 'disconnected' })
+  const [failed, setFailed] = useState(false)
   const [agreed, setAgreed] = useState(false)
   const [qrSrc, setQrSrc] = useState<string | null>(null)
 
+  const load = useCallback(() => {
+    setFailed(false)
+    return window.api.getStatus().then(setStatus).catch(() => setFailed(true))
+  }, [])
+
   useEffect(() => {
     let live = true
-    window.api.getStatus().then((s) => live && setStatus(s))
+    window.api.getStatus().then((s) => live && setStatus(s)).catch(() => live && setFailed(true))
     const off = window.api.onStatus((s) => live && setStatus(s))
     return () => { live = false; off() }
   }, [])
@@ -35,14 +46,15 @@ export function ConnectionPage() {
 
   return (
     <div>
-      <h2 className="h4 mb-3">
-        <i className="bi bi-whatsapp me-2" />Koneksi WhatsApp{' '}
-        <span className={`badge ${BADGE[status.state]} fs-6 align-middle`}>{id.state[status.state]}</span>
-      </h2>
+      <PageHeader icon="bi-whatsapp" title="Koneksi WhatsApp"
+        subtitle="Hubungkan nomor WhatsApp yang dipakai bot."
+        actions={<StatusBadge tone={TONE[status.state]}>{id.state[status.state]}</StatusBadge>} />
+
+      {failed && <div className="mb-3"><ErrorState message="Gagal memuat status koneksi." onRetry={load} /></div>}
 
       {status.state !== 'connected' && (
         <div className="alert alert-warning">
-          <i className="bi bi-exclamation-triangle me-2" />{id.risk}
+          <i className="bi bi-exclamation-triangle me-2" aria-hidden="true" />{id.risk}
           <div className="form-check mt-3">
             <input className="form-check-input" type="checkbox" id="agree" checked={agreed}
               onChange={(e) => setAgreed(e.target.checked)} />
@@ -54,23 +66,24 @@ export function ConnectionPage() {
       )}
 
       {qrSrc && (
-        <div className="card mb-3" style={{ maxWidth: 320 }}>
-          <div className="card-body text-center">
+        <Card title="Scan untuk menautkan" className="mb-3" aria-label="QR WhatsApp">
+          <div className="text-center">
             <img src={qrSrc} alt="QR WhatsApp" width={260} height={260} />
             <p className="small text-body-secondary mb-0 mt-2">
               WhatsApp → Perangkat tertaut → Tautkan perangkat, lalu scan kode ini.
             </p>
           </div>
-        </div>
+        </Card>
       )}
 
       {status.state === 'connected' ? (
-        <button className="btn btn-outline-danger" onClick={() => window.api.logout()}>
-          <i className="bi bi-box-arrow-right me-1" />Logout
-        </button>
+        <ConfirmButton label="Keluar dari WhatsApp" confirmLabel="Ya, keluar" className="btn btn-outline-danger"
+          onConfirm={() => window.api.logout()}>
+          <><i className="bi bi-box-arrow-right me-1" aria-hidden="true" />Keluar dari WhatsApp</>
+        </ConfirmButton>
       ) : (
-        <button className="btn btn-success" disabled={!agreed || busy} onClick={() => window.api.connect()}>
-          <i className="bi bi-link-45deg me-1" />Hubungkan
+        <button className="btn btn-primary" disabled={!agreed || busy} onClick={() => window.api.connect()}>
+          <i className="bi bi-link-45deg me-1" aria-hidden="true" />Hubungkan WhatsApp
         </button>
       )}
     </div>

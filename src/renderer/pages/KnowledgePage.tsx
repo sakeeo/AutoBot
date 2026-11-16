@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FileInfo } from '../../shared/ipc'
 import { useSettings } from '../useSettings'
+import { Card } from '../ui/Card'
+import { ConfirmButton } from '../ui/ConfirmButton'
+import { DataTable } from '../ui/DataTable'
+import { PageHeader } from '../ui/PageHeader'
+import { EmptyState } from '../ui/States'
+import { StatusBadge } from '../ui/StatusBadge'
 
 export function KnowledgePage() {
   const [settings, patch] = useSettings()
@@ -26,35 +32,38 @@ export function KnowledgePage() {
 
   return (
     <div>
-      <h2 className="h4 mb-3"><i className="bi bi-folder2-open me-2" />Folder Pengetahuan</h2>
-      <p className="text-body-secondary">
-        Bot hanya menjawab dari isi folder ini (.md .txt .pdf .docx .csv .xlsx .json).
-        File <code>.env</code>, <code>*.key</code>, dan <code>*.pem</code> tidak pernah dibaca.
-      </p>
-
-      <div className="mb-3">
-        <button className="btn btn-primary me-2" onClick={pick}>
-          <i className="bi bi-folder-plus me-1" />Pilih Folder
-        </button>
-        <button className="btn btn-outline-secondary" onClick={() => window.api.reindex().then(refresh)}>
-          <i className="bi bi-arrow-repeat me-1" />Index ulang
-        </button>
-      </div>
-
-      <ul className="list-group mb-4">
-        {folders.map((f) => (
-          <li key={f} className="list-group-item d-flex justify-content-between align-items-center">
-            <code>{f}</code>
-            <button className="btn btn-sm btn-outline-danger" aria-label={`Hapus ${f}`}
-              onClick={() => patch({ knowledgeFolders: folders.filter((x) => x !== f) })}>
-              <i className="bi bi-trash" />
+      <PageHeader icon="bi-folder2-open" title="Folder Pengetahuan"
+        subtitle="Bot hanya menjawab dari isi folder ini (.md .txt .pdf .docx .csv .xlsx .json). File .env, *.key, dan *.pem tidak pernah dibaca."
+        actions={
+          <>
+            <button className="btn btn-primary" onClick={pick}>
+              <i className="bi bi-folder-plus me-1" aria-hidden="true" />Pilih Folder
             </button>
-          </li>
-        ))}
-        {folders.length === 0 && <li className="list-group-item text-body-secondary">Belum ada folder.</li>}
-      </ul>
+            <button className="btn btn-outline-secondary" onClick={() => window.api.reindex().then(refresh)}>
+              <i className="bi bi-arrow-repeat me-1" aria-hidden="true" />Index ulang
+            </button>
+          </>
+        } />
 
-      <div className="mb-4">
+      <Card title="Folder" className="mb-3">
+        {folders.length === 0 ? (
+          <EmptyState title="Belum ada folder." hint="Klik Pilih Folder untuk menambahkan sumber pengetahuan bot." />
+        ) : (
+          <ul className="list-group list-group-flush">
+            {folders.map((f) => (
+              <li key={f} className="list-group-item px-0 d-flex justify-content-between align-items-center">
+                <code>{f}</code>
+                <ConfirmButton label="Hapus" ariaLabel={`Hapus ${f}`}
+                  onConfirm={() => patch({ knowledgeFolders: folders.filter((x) => x !== f) })}>
+                  <i className="bi bi-trash" aria-hidden="true" />
+                </ConfirmButton>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      <Card title="Pengecualian" className="mb-3">
         <label htmlFor="exclude" className="form-label">Pola pengecualian (satu per baris, gaya .gitignore)</label>
         <textarea id="exclude" className="form-control font-monospace" rows={3} value={excludeText}
           onChange={(e) => setExclude(e.target.value)}
@@ -62,25 +71,26 @@ export function KnowledgePage() {
             if (exclude !== null)
               patch({ excludePatterns: exclude.split('\n').map((s) => s.trim()).filter(Boolean) })
           }} />
-      </div>
+      </Card>
 
-      <table className="table table-sm align-middle">
-        <thead><tr><th>File</th><th>Status</th><th className="text-end">Chunk</th></tr></thead>
-        <tbody>
-          {files.map((f) => (
-            <tr key={f.file}>
-              <td className="text-break">{f.file}</td>
-              <td>
-                {f.status === 'indexed'
-                  ? <span className="badge text-bg-success">terindeks</span>
-                  : <span className="badge text-bg-danger">gagal: {f.reason}</span>}
-              </td>
-              <td className="text-end">{f.chunks}</td>
-            </tr>
-          ))}
-          {files.length === 0 && <tr><td colSpan={3} className="text-body-secondary">Belum ada file terindeks.</td></tr>}
-        </tbody>
-      </table>
+      <Card title="File terindeks">
+        <DataTable<FileInfo>
+          caption="File terindeks"
+          rows={files}
+          rowKey={(f) => f.file}
+          empty={<EmptyState title="Belum ada file terindeks." hint="File muncul di sini setelah folder dipilih dan diindeks." />}
+          columns={[
+            { key: 'file', header: 'File', render: (f) => <span className="text-break">{f.file}</span> },
+            {
+              key: 'status', header: 'Status',
+              render: (f) => f.status === 'indexed'
+                ? <StatusBadge tone="success">Terindeks</StatusBadge>
+                : <StatusBadge tone="danger">{`Gagal: ${f.reason ?? 'tidak diketahui'}`}</StatusBadge>
+            },
+            { key: 'chunks', header: 'Chunk', align: 'end', render: (f) => String(f.chunks) }
+          ]}
+        />
+      </Card>
     </div>
   )
 }

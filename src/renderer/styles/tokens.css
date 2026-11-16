@@ -133,6 +133,11 @@ h6, .h6 { font-size: 0.9375rem; font-weight: 600; }
 a { color: var(--color-primary-text); }
 code { color: var(--color-primary-text); font-size: 0.8125rem; }
 
+/* Text utilities: use the readable status text colours, not the pale guide status colours. */
+.text-danger { color: var(--color-danger-text) !important; }
+.text-success { color: var(--color-success-text) !important; }
+.text-warning { color: var(--color-warning-text) !important; }
+
 /* Keyboard focus (§9, §10) */
 :focus-visible {
   outline: 2px solid var(--color-primary-text);
