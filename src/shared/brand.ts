@@ -217,7 +217,7 @@ const BASE: BrandProfile = {
   leadMinimum: ['nama', 'kebutuhan'],
   objections: [],
   templates: {
-    handoffFarewell: 'Baik {sapaan}, saya teruskan ke tim kami ya. {jam_kerja}',
+    handoffFarewell: 'Baik {sapaan}, saya teruskan ke tim kami ya. Tim kami biasanya membalas {jam_kerja}.',
     checkout: 'Ini tautan untuk memesan {produk}: {tautan}',
     outsideHours:
       'Saat ini di luar jam kerja tim kami ({jam_kerja}). Pesan {sapaan} sudah kami catat dan akan dibalas saat jam kerja.',
