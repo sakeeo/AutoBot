@@ -2,6 +2,7 @@ import type { JSX } from 'react'
 import { id } from './i18n/id'
 import { DashboardPage } from './pages/DashboardPage'
 import { MessagesPage } from './pages/MessagesPage'
+import { BroadcastPage } from './pages/BroadcastPage'
 import { TestPanel } from './pages/TestPanel'
 import { LogPage } from './pages/LogPage'
 import { ConnectorPage } from './pages/ConnectorPage'
@@ -9,13 +10,14 @@ import { KnowledgePage } from './pages/KnowledgePage'
 import { BrandPage } from './pages/BrandPage'
 import { SecurityPage } from './pages/SecurityPage'
 
-export type NavKey = 'dashboard' | 'messages' | 'test' | 'log' | 'connector' | 'knowledge' | 'brand' | 'security'
+export type NavKey = 'dashboard' | 'messages' | 'broadcast' | 'test' | 'log' | 'connector' | 'knowledge' | 'brand' | 'security'
 export interface NavItem { key: NavKey; icon: string; label: string; view: JSX.Element }
 
 /** Menu items that sit outside the Pengaturan group. */
 export const TOP_ITEMS: NavItem[] = [
   { key: 'dashboard', icon: 'bi-speedometer2', label: id.nav.dashboard, view: <DashboardPage /> },
   { key: 'messages', icon: 'bi-chat-left-text', label: id.nav.messages, view: <MessagesPage /> },
+  { key: 'broadcast', icon: 'bi-megaphone', label: id.nav.broadcast, view: <BroadcastPage /> },
   { key: 'test', icon: 'bi-chat-dots', label: id.nav.test, view: <TestPanel /> },
   { key: 'log', icon: 'bi-journal-text', label: id.nav.log, view: <LogPage /> }
 ]

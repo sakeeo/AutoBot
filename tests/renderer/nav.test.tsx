@@ -107,11 +107,11 @@ describe('navigation', () => {
     await waitFor(() => expect(api.updateSettings).toHaveBeenCalledWith({ theme: 'dark' }))
   })
 
-  it('has a Pesan entry between Dashboard and Uji Jawaban that opens the live messages page', async () => {
+  it('has Pesan and Broadcast entries between Dashboard and Uji Jawaban; Pesan opens the live messages page', async () => {
     render(<App />)
     const nav = await screen.findByRole('navigation', { name: 'Menu utama' })
     const names = within(nav).getAllByRole('button').map((b) => b.textContent?.trim())
-    expect(names.slice(0, 4)).toEqual(['Dashboard', 'Pesan', 'Uji Jawaban', 'Log'])
+    expect(names.slice(0, 5)).toEqual(['Dashboard', 'Pesan', 'Broadcast', 'Uji Jawaban', 'Log'])
     fireEvent.click(within(nav).getByRole('button', { name: 'Pesan' }))
     expect(await screen.findByRole('heading', { level: 2, name: 'Pesan' })).toBeTruthy()
   })

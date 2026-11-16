@@ -3,6 +3,7 @@ export const id = {
   nav: {
     dashboard: 'Dashboard',
     messages: 'Pesan',
+    broadcast: 'Broadcast',
     test: 'Uji Jawaban',
     log: 'Log',
     settings: 'Pengaturan',
