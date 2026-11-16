@@ -110,6 +110,14 @@ describe('campaigns', () => {
     expect((r as { errors: string[] }).errors.join(' ')).toMatch(/nama bisnis/i)
     expect(t.h.bcCampaigns()).toEqual([])
   })
+  it('returns up to three rendered samples with the real business name and the opt-out sentence', () => {
+    const t = setup()
+    t.people(5)
+    const r = t.h.bcCreateCampaign({ name: 'x', template: good, audience: 'semua' }) as { ok: true; samples: string[] }
+    expect(r.samples).toHaveLength(3)
+    expect(r.samples[0]).toMatch(/^Halo Nama0, ini Kopi Sudut/)
+    expect(r.samples[0].endsWith('Balas BERHENTI untuk tidak menerima pesan ini lagi.')).toBe(true)
+  })
   it('refuses to start until the safety settings are declared and switched on', () => {
     const t = setup()
     t.people(2)

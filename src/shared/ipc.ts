@@ -156,7 +156,7 @@ export interface Api {
   bcImportCommit(previewId: string, attest: { accepted: boolean; sourceNote: string }): Promise<{ importId: number; added: number; notOnWhatsApp: number; blockedBySuppression: number; aborted: boolean }>
   bcSendConfirmations(): Promise<{ ok: true; campaignId: number } | { ok: false; error: string }>
   bcCampaigns(): Promise<CampaignView[]>
-  bcCreateCampaign(input: { name: string; template: string; audience: 'chat' | 'impor' | 'semua' }): Promise<{ ok: true; campaign: Campaign; warnings: string[] } | { ok: false; errors: string[]; warnings: string[] }>
+  bcCreateCampaign(input: { name: string; template: string; audience: 'chat' | 'impor' | 'semua' }): Promise<{ ok: true; campaign: Campaign; warnings: string[]; samples: string[] } | { ok: false; errors: string[]; warnings: string[] }>
   bcPreviewCampaign(id: number): Promise<{ eligible: number; skipped: Record<string, number>; estimatedDays: number }>
   bcStartCampaign(id: number, confirmText?: string): Promise<{ ok: true } | { ok: false; error: string }>
   bcPauseCampaign(id: number): Promise<void>

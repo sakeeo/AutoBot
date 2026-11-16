@@ -5,7 +5,7 @@ import type {
 } from '../../shared/broadcast'
 import type { BroadcastEngine, SafetySettings } from './engine'
 import { ImportService, parseImport, type ImportPreview } from './import'
-import { lintMessage } from './lint'
+import { lintMessage, renderTemplate, withFooter } from './lint'
 import { TIER_LIMITS, activeDayIndex, dailyCap, effectiveTier, localDay } from './limits'
 import type { BroadcastStore } from './store'
 
@@ -174,7 +174,10 @@ export function createBroadcastHandlers(d: BroadcastIpcDeps) {
       const lint = lintMessage(i.template, { businessName: d.businessName() })
       if (lint.errors.length > 0) return { ok: false as const, errors: lint.errors, warnings: lint.warnings }
       const campaign = store.createCampaign({ name: i.name, kind: 'broadcast', template: i.template, audience: i.audience })
-      return { ok: true as const, campaign, warnings: lint.warnings }
+      // Three rendered examples (real business name, real footer) so the user sees exactly what people will get.
+      const samples = store.audienceContacts('broadcast', i.audience).slice(0, 3).map((c) =>
+        withFooter(renderTemplate(i.template, { ...c.vars, nama: c.name, bisnis: d.businessName() })))
+      return { ok: true as const, campaign, warnings: lint.warnings, samples }
     },
     bcStartCampaign(id: unknown, confirmText?: unknown) {
       isLocked(d)
