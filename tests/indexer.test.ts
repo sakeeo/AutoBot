@@ -76,6 +76,26 @@ describe('Indexer', () => {
     await waitFor(() => store.search('promo diskon', 3).length > 0)
   })
 
+  it('calls onDocument with the raw csv/json text and onRemove when the file is deleted', async () => {
+    const dir = makeDir('wa-idx-')
+    const store = new IndexStore(openDb(':memory:'))
+    const docs: { file: string; raw: string; ext: string }[] = []
+    const removed: string[] = []
+    indexer = new Indexer(store, {
+      debounceMs: 100,
+      onDocument: (file, raw, ext) => docs.push({ file, raw, ext }),
+      onRemove: (file) => removed.push(file)
+    })
+    const csv = 'id,nama,harga\na,Produk A,1000\n'
+    writeFileSync(join(dir, 'katalog.csv'), csv)
+    writeFileSync(join(dir, 'faq.md'), 'isi dokumen biasa')
+    await indexer.start([dir], [])
+    expect(docs).toHaveLength(1)
+    expect(docs[0]).toMatchObject({ raw: csv, ext: '.csv' })
+    rmSync(join(dir, 'katalog.csv'))
+    await waitFor(() => removed.length === 1)
+    expect(removed[0].endsWith('katalog.csv')).toBe(true)
+  })
   it('emits status events', async () => {
     const { dir } = setup()
     writeFileSync(join(dir, 'a.md'), 'isi dokumen')

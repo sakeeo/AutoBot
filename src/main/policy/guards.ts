@@ -65,6 +65,14 @@ function moneyValue(num: string, mult?: string): number {
   return parseInt(num.replace(/[.,]/g, ''), 10)
 }
 
+/** First rupiah amount found in free text ("Rp1.500.000", "1,5 juta", "25rb", 15000), or null. */
+export function parseRupiah(s: string): number | null {
+  const m = /(\d[\d.,]*)(?:\s*(juta|jt|ribu|rb|k)\b)?/i.exec(s)
+  if (!m) return null
+  const v = moneyValue(m[1], m[2])
+  return Number.isFinite(v) ? v : null
+}
+
 function strictMoney(text: string): number[] {
   const re =
     /rp\.?\s*(\d[\d.,]*)(?:\s*(juta|jt|ribu|rb|k)\b)?|(\d[\d.,]*)\s*(juta|jt|ribu|rb)\b|\b(\d{1,3}(?:[.,]\d{3})+|\d{5,})\b/gi

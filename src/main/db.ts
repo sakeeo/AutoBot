@@ -41,6 +41,19 @@ const MIGRATIONS: string[] = [
     id INTEGER PRIMARY KEY CHECK (id = 1),
     json TEXT NOT NULL
   );
+  `,
+  `
+  CREATE TABLE products (
+    id TEXT PRIMARY KEY,
+    file TEXT NOT NULL,
+    name TEXT NOT NULL,
+    price REAL,
+    description TEXT NOT NULL DEFAULT '',
+    checkout_url TEXT,
+    suitable_for TEXT NOT NULL DEFAULT '',
+    stock TEXT NOT NULL DEFAULT ''
+  );
+  CREATE INDEX products_file ON products(file);
   `
 ]
 

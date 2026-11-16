@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { readdir, stat } from 'node:fs/promises'
+import { readdir, readFile, stat } from 'node:fs/promises'
 import { extname, join, relative, sep } from 'node:path'
 import { watch, type FSWatcher } from 'chokidar'
 import ignore, { type Ignore } from 'ignore'
@@ -27,9 +27,22 @@ export class Indexer extends EventEmitter {
   private timers = new Map<string, NodeJS.Timeout>()
   private debounceMs: number
 
-  constructor(private store: IndexStore, opts: { debounceMs?: number } = {}) {
+  private onDocument?: (file: string, raw: string, ext: string) => void
+  private onRemove?: (file: string) => void
+
+  constructor(
+    private store: IndexStore,
+    opts: {
+      debounceMs?: number
+      /** Called with the raw text of every successfully indexed .csv/.json file (e.g. for the product catalog). */
+      onDocument?: (file: string, raw: string, ext: string) => void
+      onRemove?: (file: string) => void
+    } = {}
+  ) {
     super()
     this.debounceMs = opts.debounceMs ?? 500
+    this.onDocument = opts.onDocument
+    this.onRemove = opts.onRemove
   }
 
   async start(folders: string[], exclude: string[]): Promise<void> {
@@ -117,6 +130,9 @@ export class Indexer extends EventEmitter {
       const { text } = await loadDocument(file)
       const chunks = chunkText(text)
       this.store.replaceFile(file, mtime, chunks)
+      const ext = extname(file).toLowerCase()
+      if (this.onDocument && (ext === '.csv' || ext === '.json'))
+        this.onDocument(file, await readFile(file, 'utf8'), ext)
       this.emit('status', { file, status: 'indexed' } satisfies IndexStatusEvent)
     } catch (e) {
       const reason = e instanceof LoaderError ? e.code : 'PARSE_FAILED'
@@ -127,6 +143,7 @@ export class Indexer extends EventEmitter {
 
   private async remove(file: string): Promise<void> {
     this.store.removeFile(file)
+    this.onRemove?.(file)
     this.emit('status', { file, status: 'removed' } satisfies IndexStatusEvent)
   }
 }
