@@ -27,7 +27,18 @@ const api: Api = {
   deleteApiKey: () => ipcRenderer.invoke(C.deleteApiKey),
   openConsole: () => ipcRenderer.invoke(C.openConsole),
   getLog: (limit) => ipcRenderer.invoke(C.getLog, limit),
-  onEscalate: subscribe(C.evtEscalate)
+  onEscalate: subscribe(C.evtEscalate),
+  getBrand: () => ipcRenderer.invoke(C.getBrand),
+  saveBrandDraft: (p) => ipcRenderer.invoke(C.saveBrandDraft, p),
+  applyBrand: () => ipcRenderer.invoke(C.applyBrand),
+  listBrandVersions: () => ipcRenderer.invoke(C.listBrandVersions),
+  restoreBrandVersion: (v) => ipcRenderer.invoke(C.restoreBrandVersion, v),
+  exportBrand: () => ipcRenderer.invoke(C.exportBrand),
+  importBrand: (json) => ipcRenderer.invoke(C.importBrand, json),
+  previewChat: (input) => ipcRenderer.invoke(C.previewChat, input),
+  listPresets: () => ipcRenderer.invoke(C.listPresets),
+  loadPreset: (id) => ipcRenderer.invoke(C.loadPreset, id),
+  onHandoff: subscribe(C.evtHandoff)
 }
 
 contextBridge.exposeInMainWorld('api', api)

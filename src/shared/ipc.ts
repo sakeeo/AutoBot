@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { PROVIDER_IDS } from './providers'
+import type { BrandProfile, Issue } from './brand'
 import type { Answer, ConnStatus, Decision, Settings } from './types'
 
 export { CHANNELS } from './channels'
@@ -58,11 +59,38 @@ export interface LogRow {
   created_at: number
   text: string | null
 }
+/** What one simulated or previewed AI turn did (mirrors the agent's result, minus internals). */
+export interface AgentTurnView {
+  intent: string
+  action: { kind: string; ruleId: string | null; forced: boolean; reason?: string; linkId?: string; productId?: string; adminId?: string }
+  replyParts: string[]
+  linkSent: string | null
+  handoff: { reason: string } | null
+  sources: string[]
+  matchedRule: string | null
+  removed: { numbers: boolean; urls: string[]; numbersUnknown: string[] }
+  fallback: boolean
+  hits: { file: string; text: string; coverage: number }[]
+}
 export interface TestResult {
   decision: Decision
   answer: Answer | null
   via: 'extractive' | 'ai' | null
+  agent?: AgentTurnView
 }
+export interface BrandSnapshot {
+  active: BrandProfile
+  draft: BrandProfile
+  botNumber: string | null
+  productCount: number
+}
+export type PreviewChatResult = { ok: true; turns: AgentTurnView[] } | { ok: false; error: string }
+
+export const PreviewInputSchema = z
+  .object({ draft: z.boolean(), messages: z.array(QuestionSchema).min(1).max(10) })
+  .strict()
+export const VersionSchema = z.number().int().min(0)
+export const MAX_BRAND_JSON = 200_000
 
 export interface Api {
   getStatus(): Promise<ConnStatus>
@@ -82,4 +110,15 @@ export interface Api {
   openConsole(): Promise<void>
   getLog(limit: number): Promise<LogRow[]>
   onEscalate(cb: (m: { chatId: string; text: string | null }) => void): () => void
+  getBrand(): Promise<BrandSnapshot>
+  saveBrandDraft(p: unknown): Promise<{ ok: boolean; issues: Issue[] }>
+  applyBrand(): Promise<{ ok: boolean; issues: Issue[]; version?: number }>
+  listBrandVersions(): Promise<{ version: number; createdAt: number }[]>
+  restoreBrandVersion(v: number): Promise<{ ok: boolean; error?: string }>
+  exportBrand(): Promise<string>
+  importBrand(json: string): Promise<{ ok: boolean; issues: Issue[] }>
+  previewChat(input: { draft: boolean; messages: string[] }): Promise<PreviewChatResult>
+  listPresets(): Promise<{ id: string; label: string }[]>
+  loadPreset(id: string): Promise<{ ok: boolean; issues: Issue[]; error?: string }>
+  onHandoff(cb: (e: { chatId: string; reason: string; summary: string }) => void): () => void
 }

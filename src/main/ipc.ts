@@ -10,6 +10,7 @@ import type { ConnStatus, Settings } from '../shared/types'
 import { CHANNELS as C } from '../shared/channels'
 import { ApiKeySchema, LimitSchema, QuestionSchema, SettingsPatchSchema, type LogRow } from '../shared/ipc'
 import { saveApiKey } from './ai-key'
+import type { BrandHandlers } from './brand-ipc'
 import { PROVIDERS, resolveBaseUrl, secretNameFor } from '../shared/providers'
 
 export interface IpcDeps {
@@ -24,6 +25,7 @@ export interface IpcDeps {
   makeProvider(ai: Settings['ai'], key: string): AiProvider
   getWindow(): BrowserWindow | null
   onSettingsChanged(prev: Settings, next: Settings): void
+  brandHandlers: BrandHandlers
 }
 
 export function registerIpc(d: IpcDeps): void {
@@ -82,6 +84,18 @@ export function registerIpc(d: IpcDeps): void {
     const url = PROVIDERS[d.settings.get().ai.provider].consoleUrl
     return url ? shell.openExternal(url) : undefined
   })
+
+  const b = d.brandHandlers
+  ipcMain.handle(C.getBrand, () => b.getBrand())
+  ipcMain.handle(C.saveBrandDraft, (_e, p: unknown) => b.saveBrandDraft(p))
+  ipcMain.handle(C.applyBrand, () => b.applyBrand())
+  ipcMain.handle(C.listBrandVersions, () => b.listBrandVersions())
+  ipcMain.handle(C.restoreBrandVersion, (_e, v: unknown) => b.restoreBrandVersion(v))
+  ipcMain.handle(C.exportBrand, () => b.exportBrand())
+  ipcMain.handle(C.importBrand, (_e, json: unknown) => b.importBrand(json))
+  ipcMain.handle(C.previewChat, (_e, input: unknown) => b.previewChat(input))
+  ipcMain.handle(C.listPresets, () => b.listPresets())
+  ipcMain.handle(C.loadPreset, (_e, id: unknown) => b.loadPreset(id))
 
   ipcMain.handle(C.getLog, (_e, limit: unknown): LogRow[] =>
     d.db

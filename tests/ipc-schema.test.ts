@@ -43,6 +43,18 @@ describe('CHANNELS', () => {
   })
 })
 
+describe('brand channels', () => {
+  it('exposes every brand and conversion channel and still no credential channel', () => {
+    for (const c of ['getBrand', 'saveBrandDraft', 'applyBrand', 'listBrandVersions', 'restoreBrandVersion',
+      'exportBrand', 'importBrand', 'previewChat', 'listPresets', 'loadPreset', 'evtHandoff'])
+      expect(CHANNELS).toHaveProperty(c)
+    const names = Object.keys(CHANNELS).join(' ').toLowerCase()
+    expect(names).not.toContain('getapikey')
+    expect(names).not.toContain('creds')
+    expect(names).not.toContain('session')
+  })
+})
+
 describe('SettingsPatchSchema ai provider', () => {
   const ai = (o: object) => ({ ai: { model: 'm', maxTokens: 100, ...o } })
   it('accepts known providers and rejects unknown ones', () => {

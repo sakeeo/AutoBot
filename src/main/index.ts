@@ -17,6 +17,7 @@ import type { AiProvider } from './answer/ai-answerer'
 import { makeProvider } from './answer/make-provider'
 import { secretNameFor } from '../shared/providers'
 import { registerIpc } from './ipc'
+import { createBrandHandlers } from './brand-ipc'
 import { createTray } from './tray'
 import { CHANNELS as C } from '../shared/channels'
 import type { ConnStatus } from '../shared/types'
@@ -133,7 +134,8 @@ function boot(): void {
     if (Notification.isSupported())
       new Notification({ title: 'Perlu dibalas manual', body: (m.text ?? '').slice(0, 120) }).show()
   })
-  handoff.on('handoff', (e: { chatId: string; reason: string }) => {
+  handoff.on('handoff', (e: { chatId: string; reason: string; summary: string }) => {
+    send(C.evtHandoff, { chatId: e.chatId, reason: e.reason, summary: e.summary })
     if (Notification.isSupported())
       new Notification({ title: 'Pelanggan diserahkan ke admin', body: `${e.chatId.split('@')[0]} · ${e.reason}` }).show()
   })
@@ -145,7 +147,18 @@ function boot(): void {
   }
   restartIndexer()
 
+  const brandHandlers = createBrandHandlers({
+    brand: brandStore, catalog, store, gateway, clock,
+    getProvider: () => {
+      const provider = currentProvider()
+      if (!provider) return null
+      const { model, maxTokens } = settings.get().ai
+      return { provider, cfg: { model, maxTokens } }
+    }
+  })
+
   registerIpc({
+    brandHandlers,
     gateway, getStatus: () => status, indexer, store, settings, secrets, pipeline, db, makeProvider,
     getWindow: () => win,
     onSettingsChanged: (prev, next) => {

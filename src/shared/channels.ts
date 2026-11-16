@@ -17,7 +17,18 @@ export const CHANNELS = {
   deleteApiKey: 'ai:delete-key',
   openConsole: 'ai:open-console',
   getLog: 'log:get',
+  getBrand: 'brand:get',
+  saveBrandDraft: 'brand:save-draft',
+  applyBrand: 'brand:apply',
+  listBrandVersions: 'brand:list-versions',
+  restoreBrandVersion: 'brand:restore-version',
+  exportBrand: 'brand:export',
+  importBrand: 'brand:import',
+  previewChat: 'brand:preview-chat',
+  listPresets: 'brand:list-presets',
+  loadPreset: 'brand:load-preset',
   evtStatus: 'evt:status',
   evtIndexStatus: 'evt:index-status',
-  evtEscalate: 'evt:escalate'
+  evtEscalate: 'evt:escalate',
+  evtHandoff: 'evt:handoff'
 } as const
