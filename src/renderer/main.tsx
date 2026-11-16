@@ -9,5 +9,8 @@ import './styles/tokens.css'
 import './styles/shell.css'
 import './styles/ui.css'
 import { App } from './App'
+import { applyCachedTheme } from './theme'
+
+applyCachedTheme()
 
 createRoot(document.getElementById('root')!).render(<App />)

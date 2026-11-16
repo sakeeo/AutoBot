@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useSettings } from './useSettings'
+import { SettingsProvider, useSettings } from './settings-context'
 import { applyTheme } from './theme'
 import { SETTINGS_ITEMS, TOP_ITEMS, crumbsOf, groupOf, type NavKey } from './nav'
 import { Sidebar } from './shell/Sidebar'
@@ -40,7 +40,9 @@ export function App() {
   if (auth.enabled && auth.locked) return <LockScreen onUnlocked={refresh} />
   return (
     <AuthContext.Provider value={{ state: auth, refresh }}>
-      <Shell />
+      <SettingsProvider>
+        <Shell />
+      </SettingsProvider>
     </AuthContext.Provider>
   )
 }

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type RefObject } from 'react'
 import type { ConnStatus } from '../../shared/types'
 import { id } from '../i18n/id'
 import { useAuth } from '../auth-context'
+import { useSettings } from '../settings-context'
+import { effectiveTheme } from '../theme'
 import { Breadcrumb } from './Breadcrumb'
 
 const TONE: Record<ConnStatus['state'], string> = {
@@ -23,6 +25,7 @@ interface Props {
 
 export function TopBar({ crumbs, showMenuButton, onMenu, menuRef, onGoDashboard, onGoSecurity }: Props) {
   const { state: auth, refresh } = useAuth()
+  const [settings, patchSettings] = useSettings()
   const [status, setStatus] = useState<ConnStatus['state']>('disconnected')
   const [waiting, setWaiting] = useState(0)
   const [profileOpen, setProfileOpen] = useState(false)
@@ -72,6 +75,15 @@ export function TopBar({ crumbs, showMenuButton, onMenu, menuRef, onGoDashboard,
         <i className="bi bi-bell" aria-hidden="true" />
         {waiting > 0 && <span className="topbar-count" aria-hidden="true">{waiting}</span>}
       </button>
+      {settings && (() => {
+        const dark = effectiveTheme(settings.theme) === 'dark'
+        return (
+          <button type="button" className="topbar-btn" aria-label={dark ? 'Beralih ke mode terang' : 'Beralih ke mode gelap'}
+            onClick={() => patchSettings({ theme: dark ? 'light' : 'dark' })}>
+            <i className={`bi ${dark ? 'bi-sun' : 'bi-moon'}`} aria-hidden="true" />
+          </button>
+        )
+      })()}
       <div className="profile-wrap" ref={profileRef}>
         <button type="button" className="topbar-btn" aria-label="Menu profil" aria-haspopup="menu" aria-expanded={profileOpen}
           onClick={() => setProfileOpen((o) => !o)}>
