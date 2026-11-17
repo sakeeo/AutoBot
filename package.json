@@ -12,7 +12,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "dist": "npm run build && electron-builder",
-    "dist:win": "npm run build && electron-builder --win nsis",
+    "dist:win": "npm run build && electron-builder --win nsis --publish never",
     "rebuild:electron": "electron-builder install-app-deps",
     "rebuild:node": "npm rebuild better-sqlite3"
   },
