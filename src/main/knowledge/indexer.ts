@@ -21,6 +21,8 @@ interface Root {
   ig: Ignore
 }
 
+const normalizePath = (file: string): string => file.replace(/\\/g, '/')
+
 export class Indexer extends EventEmitter {
   private roots: Root[] = []
   private watcher: FSWatcher | null = null
@@ -47,7 +49,7 @@ export class Indexer extends EventEmitter {
 
   async start(folders: string[], exclude: string[]): Promise<void> {
     await this.stop()
-    this.roots = folders.map((dir) => ({ dir, ig: ignore().add([...ALWAYS_EXCLUDED, ...exclude]) }))
+    this.roots = folders.map((dir) => ({ dir: normalizePath(dir), ig: ignore().add([...ALWAYS_EXCLUDED, ...exclude]) }))
     for (const root of this.roots) await this.scan(root.dir, false)
     if (this.roots.length === 0) return
     this.watcher = watch(
@@ -78,26 +80,28 @@ export class Indexer extends EventEmitter {
   }
 
   private schedule(file: string, removed: boolean): void {
-    const prev = this.timers.get(file)
+    const normalized = normalizePath(file)
+    const prev = this.timers.get(normalized)
     if (prev) clearTimeout(prev)
     this.timers.set(
-      file,
+      normalized,
       setTimeout(() => {
-        this.timers.delete(file)
-        const job = removed ? this.remove(file) : this.indexFile(file, false)
+        this.timers.delete(normalized)
+        const job = removed ? this.remove(normalized) : this.indexFile(normalized, false)
         job.catch(() => undefined)
       }, this.debounceMs)
     )
   }
 
   private rootOf(file: string): Root | undefined {
-    return this.roots.find((r) => !relative(r.dir, file).startsWith('..'))
+    const normalized = normalizePath(file)
+    return this.roots.find((r) => !relative(r.dir, normalized).startsWith('..'))
   }
 
   private isExcluded(file: string): boolean {
     const root = this.rootOf(file)
     if (!root) return true
-    const rel = relative(root.dir, file).split(sep).join('/')
+    const rel = normalizePath(relative(root.dir, file)).split(sep).join('/')
     return rel === '' || root.ig.ignores(rel)
   }
 
@@ -109,10 +113,10 @@ export class Indexer extends EventEmitter {
       return
     }
     for (const e of entries) {
-      const full = join(dir, e.name)
+      const full = normalizePath(join(dir, e.name))
       if (e.isDirectory()) {
         const root = this.rootOf(full)
-        const rel = root ? relative(root.dir, full).split(sep).join('/') : ''
+        const rel = root ? normalizePath(relative(root.dir, full)).split(sep).join('/') : ''
         if (root && root.ig.ignores(rel + '/')) continue
         await this.scan(full, force)
       } else if (e.isFile()) {
@@ -122,28 +126,30 @@ export class Indexer extends EventEmitter {
   }
 
   private async indexFile(file: string, force: boolean): Promise<void> {
-    if (this.isExcluded(file)) return
-    if (!(SUPPORTED_EXTENSIONS as readonly string[]).includes(extname(file).toLowerCase())) return
+    const normalized = normalizePath(file)
+    if (this.isExcluded(normalized)) return
+    if (!(SUPPORTED_EXTENSIONS as readonly string[]).includes(extname(normalized).toLowerCase())) return
     try {
-      const mtime = (await stat(file)).mtimeMs
-      if (!force && this.store.getMtime(file) === mtime) return
-      const { text } = await loadDocument(file)
+      const mtime = (await stat(normalized)).mtimeMs
+      if (!force && this.store.getMtime(normalized) === mtime) return
+      const { text } = await loadDocument(normalized)
       const chunks = chunkText(text)
-      this.store.replaceFile(file, mtime, chunks)
-      const ext = extname(file).toLowerCase()
+      this.store.replaceFile(normalized, mtime, chunks)
+      const ext = extname(normalized).toLowerCase()
       if (this.onDocument && (ext === '.csv' || ext === '.json'))
-        this.onDocument(file, await readFile(file, 'utf8'), ext)
-      this.emit('status', { file, status: 'indexed' } satisfies IndexStatusEvent)
+        this.onDocument(normalized, await readFile(normalized, 'utf8'), ext)
+      this.emit('status', { file: normalized, status: 'indexed' } satisfies IndexStatusEvent)
     } catch (e) {
       const reason = e instanceof LoaderError ? e.code : 'PARSE_FAILED'
-      this.store.markFailed(file, reason)
-      this.emit('status', { file, status: 'failed', reason } satisfies IndexStatusEvent)
+      this.store.markFailed(normalized, reason)
+      this.emit('status', { file: normalized, status: 'failed', reason } satisfies IndexStatusEvent)
     }
   }
 
   private async remove(file: string): Promise<void> {
-    this.store.removeFile(file)
-    this.onRemove?.(file)
-    this.emit('status', { file, status: 'removed' } satisfies IndexStatusEvent)
+    const normalized = normalizePath(file)
+    this.store.removeFile(normalized)
+    this.onRemove?.(normalized)
+    this.emit('status', { file: normalized, status: 'removed' } satisfies IndexStatusEvent)
   }
 }
