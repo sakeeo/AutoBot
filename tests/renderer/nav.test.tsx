@@ -8,7 +8,7 @@ import type { Settings } from '../../src/shared/types'
 const settings: Settings = {
   knowledgeFolders: [], excludePatterns: [], mode: 'extractive',
   outOfContext: { action: 'reply', replyText: 'Maaf' }, threshold: 0.6, allowGroups: false, cooldownSec: 10,
-  ai: { provider: 'claude', model: 'claude-haiku-5-5', maxTokens: 400 }, autoStart: false, theme: 'auto', notifyIncoming: true
+  ai: { provider: 'claude', model: 'claude-haiku-5-5', maxTokens: 400 }, autoStart: false, theme: 'auto', notifyIncoming: true, memoryEnabled: true
 }
 const period = { replied: 0, refused: 0, handoff: 0, errors: 0, links: 0 }
 
@@ -107,11 +107,11 @@ describe('navigation', () => {
     await waitFor(() => expect(api.updateSettings).toHaveBeenCalledWith({ theme: 'dark' }))
   })
 
-  it('has Pesan and Broadcast entries between Dashboard and Uji Jawaban; Pesan opens the live messages page', async () => {
+  it('has Pesan, Kontak and Broadcast entries between Dashboard and Uji Jawaban; Pesan opens the live messages page', async () => {
     render(<App />)
     const nav = await screen.findByRole('navigation', { name: 'Menu utama' })
     const names = within(nav).getAllByRole('button').map((b) => b.textContent?.trim())
-    expect(names.slice(0, 5)).toEqual(['Dashboard', 'Pesan', 'Broadcast', 'Uji Jawaban', 'Log'])
+    expect(names.slice(0, 6)).toEqual(['Dashboard', 'Pesan', 'Kontak', 'Broadcast', 'Uji Jawaban', 'Log'])
     fireEvent.click(within(nav).getByRole('button', { name: 'Pesan' }))
     expect(await screen.findByRole('heading', { level: 2, name: 'Pesan' })).toBeTruthy()
   })

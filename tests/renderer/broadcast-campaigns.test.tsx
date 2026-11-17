@@ -7,7 +7,7 @@ import type { BroadcastEvent, CampaignView } from '../../src/shared/broadcast'
 const progress = { antre: 4, terkirim: 3, gagal: 1, dilewati: 2 }
 const camp = (o: Partial<CampaignView> = {}): CampaignView => ({
   id: 1, name: 'Promo November', kind: 'broadcast', template: 'Halo', status: 'berjalan', pauseReason: null, createdAt: 1, startedAt: 2,
-  audience: 'semua', notBefore: null, progress, ...o
+  audience: 'semua', contactIds: null, notBefore: null, progress, ...o
 })
 const safety = {
   configured: true, enabled: true, tier: 'mapan' as const, ageDays: 365, activeDay: 3, dailyCap: 15, sentToday: 2,
@@ -24,6 +24,10 @@ function setApi(over: Record<string, unknown> = {}) {
     bcCreateCampaign: vi.fn().mockResolvedValue({ ok: true, campaign: camp({ id: 7, status: 'draf' }), warnings: ['Terlalu banyak huruf kapital; tulis dengan huruf biasa.'], samples: ['Halo Budi, ini Kopi Sudut.\n\nBalas BERHENTI untuk tidak menerima pesan ini lagi.'] }),
     bcPreviewCampaign: vi.fn().mockResolvedValue({ eligible: 12, skipped: { tolak: 2, terlalu_cepat: 1 }, estimatedDays: 2 }),
     bcStartCampaign: vi.fn().mockResolvedValue({ ok: true }),
+    bcAudienceContacts: vi.fn().mockResolvedValue([
+      { id: 11, number: '6281111', jid: null, name: 'Budi', vars: {}, source: 'chat', status: 'aktif', lastInboundAt: null, lastSentAt: null, sentCount: 0, importId: null },
+      { id: 12, number: '6282222', jid: null, name: 'Sari', vars: {}, source: 'chat', status: 'aktif', lastInboundAt: null, lastSentAt: null, sentCount: 0, importId: null }
+    ]),
     bcPauseCampaign: vi.fn().mockResolvedValue(undefined),
     bcResumeCampaign: vi.fn().mockResolvedValue({ ok: true }),
     bcStopCampaign: vi.fn().mockResolvedValue(undefined),
@@ -105,12 +109,37 @@ describe('Campaign wizard', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Buat kampanye' }))
     expect(screen.getByText(/dihitung dari pesan yang tercatat aplikasi/i)).toBeTruthy()
     fireEvent.click(screen.getByLabelText('Kontak chat aktif'))
+    await screen.findByText('2 dari 2 dipilih')
     fireEvent.click(screen.getByRole('button', { name: 'Lanjut' }))
   }
   const write = (text = 'Halo {nama}, ini {bisnis}: menu baru minggu ini.') => {
     fireEvent.change(screen.getByLabelText('Nama kampanye'), { target: { value: 'Promo Desember' } })
     fireEvent.change(screen.getByLabelText('Isi pesan'), { target: { value: text } })
   }
+
+  it('step 1 picks everyone by default and can leave people out one by one', async () => {
+    const api = setApi()
+    await open()
+    fireEvent.click(await screen.findByRole('button', { name: 'Buat kampanye' }))
+    fireEvent.click(screen.getByLabelText('Kontak chat aktif'))
+    await waitFor(() => expect(api.bcAudienceContacts).toHaveBeenCalledWith('chat'))
+    expect(await screen.findByText('2 dari 2 dipilih')).toBeTruthy()
+    const all = screen.getByLabelText(/Pilih semua \(2\)/) as HTMLInputElement
+    expect(all.checked).toBe(true)
+    fireEvent.click(screen.getByLabelText(/Sari/))
+    expect(screen.getByText('1 dari 2 dipilih')).toBeTruthy()
+    expect(all.checked).toBe(false)
+    fireEvent.click(all)
+    fireEvent.click(all)
+    const next = screen.getByRole('button', { name: 'Lanjut' }) as HTMLButtonElement
+    expect(next.disabled).toBe(true)
+    fireEvent.click(screen.getByLabelText(/Budi/))
+    fireEvent.click(next)
+    fireEvent.change(screen.getByLabelText('Nama kampanye'), { target: { value: 'Promo' } })
+    fireEvent.change(screen.getByLabelText('Isi pesan'), { target: { value: 'Halo {nama}, ini {bisnis}.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lanjut' }))
+    await waitFor(() => expect(api.bcCreateCampaign).toHaveBeenCalledWith(expect.objectContaining({ audience: 'chat', contactIds: [11] })))
+  })
 
   it('step 2 shows the locked opt-out sentence and blocks on lint errors', async () => {
     const api = setApi({ bcCreateCampaign: vi.fn().mockResolvedValue({ ok: false, errors: ['Pesan harus menyebut nama bisnis agar penerima mengenali pengirim.'], warnings: [] }) })
@@ -194,6 +223,7 @@ describe('Campaign wizard', () => {
 describe('Campaign wizard: no orphan drafts', () => {
   async function toReview() {
     fireEvent.click(await screen.findByRole('button', { name: 'Buat kampanye' }))
+    await screen.findByText('2 dari 2 dipilih')
     fireEvent.click(screen.getByRole('button', { name: 'Lanjut' }))
     fireEvent.change(screen.getByLabelText('Nama kampanye'), { target: { value: 'Promo' } })
     fireEvent.change(screen.getByLabelText('Isi pesan'), { target: { value: 'Halo {nama}, ini {bisnis}.' } })
@@ -232,8 +262,21 @@ describe('Editing a saved draft', () => {
     fireEvent.change(screen.getByLabelText('Nama kampanye'), { target: { value: 'Draf baru' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lanjut' }))
     await screen.findByText('12 penerima layak')
-    expect(api.bcCreateCampaign).toHaveBeenCalledWith({ name: 'Draf baru', template: 'Halo {nama}, ini {bisnis}.', audience: 'impor' })
+    expect(api.bcCreateCampaign).toHaveBeenCalledWith({ name: 'Draf baru', template: 'Halo {nama}, ini {bisnis}.', audience: 'impor', contactIds: null })
     expect(api.bcDiscardDraft).toHaveBeenCalledWith(5)
+  })
+  it('a draft with a hand-picked list keeps it, and shows the left-out people unticked', async () => {
+    const picked = { ...draft, contactIds: [12] }
+    const api = setApi({ bcCampaigns: vi.fn().mockResolvedValue([picked]) })
+    render(<BroadcastPage />)
+    await screen.findByText('Draf lama')
+    fireEvent.click(screen.getByRole('button', { name: 'Ubah' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Kembali' }))
+    expect(await screen.findByText('1 dari 2 dipilih')).toBeTruthy()
+    expect((screen.getByLabelText(/Budi/) as HTMLInputElement).checked).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Lanjut' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Lanjut' }))
+    await waitFor(() => expect(api.bcCreateCampaign).toHaveBeenCalledWith(expect.objectContaining({ contactIds: [12] })))
   })
   it('keeps the draft when the editor is closed with Batal', async () => {
     const api = setApi({ bcCampaigns: vi.fn().mockResolvedValue([draft]) })

@@ -1,4 +1,5 @@
 import type { AiProvider } from './ai-answerer'
+import { chatModelIds } from './model-list'
 
 /** Any OpenAI-compatible /chat/completions endpoint (OpenAI, DeepSeek, Gemini, Groq, OpenRouter, Ollama…). */
 export class OpenAiCompatProvider implements AiProvider {
@@ -20,7 +21,7 @@ export class OpenAiCompatProvider implements AiProvider {
           { role: 'user', content: req.user }
         ]
       }),
-      signal: AbortSignal.timeout(30_000)
+      signal: AbortSignal.timeout(90_000)
     })
     if (!res.ok) {
       // Status drives error mapping; the body is never echoed (it can reflect request details).
@@ -28,5 +29,18 @@ export class OpenAiCompatProvider implements AiProvider {
     }
     const json = (await res.json()) as { choices?: { message?: { content?: string | null } }[] }
     return json.choices?.[0]?.message?.content ?? ''
+  }
+
+  async listModels(): Promise<string[]> {
+    const res = await fetch(`${this.baseUrl}/models`, {
+      headers: { authorization: `Bearer ${this.apiKey}` },
+      signal: AbortSignal.timeout(15_000)
+    })
+    if (!res.ok) throw Object.assign(new Error(`HTTP ${res.status}`), { status: res.status })
+    const json = (await res.json()) as { data?: { id?: unknown }[]; models?: { name?: unknown }[] }
+    const raw = (json.data ?? []).map((m) => m.id).filter((id): id is string => typeof id === 'string')
+    // Ollama's native shape, in case the endpoint answers with it.
+    const alt = (json.models ?? []).map((m) => m.name).filter((n): n is string => typeof n === 'string')
+    return chatModelIds([...raw, ...alt])
   }
 }

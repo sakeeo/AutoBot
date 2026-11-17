@@ -2,6 +2,7 @@ import { basename } from 'node:path'
 import Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
 import type { Answer, Hit } from '../../shared/types'
+import { chatModelIds } from './model-list'
 
 export type AiErrorCode = 'AUTH' | 'RATE_LIMIT' | 'TIMEOUT' | 'NETWORK'
 
@@ -14,6 +15,8 @@ export class AiError extends Error {
 
 export interface AiProvider {
   complete(req: { system: string; user: string; model: string; maxTokens: number }): Promise<string>
+  /** The models this key can use. Absent when the provider has no way to list them. */
+  listModels?(): Promise<string[]>
 }
 
 export class ClaudeProvider implements AiProvider {
@@ -29,6 +32,10 @@ export class ClaudeProvider implements AiProvider {
       messages: [{ role: 'user', content: req.user }]
     })
     return res.content.map((b) => (b.type === 'text' ? b.text : '')).join('')
+  }
+  async listModels(): Promise<string[]> {
+    const page = await this.client.models.list({ limit: 100 }, { timeout: 15_000 })
+    return chatModelIds(page.data.map((m) => m.id))
   }
 }
 
@@ -77,7 +84,7 @@ export function toAiError(e: unknown): AiError {
   return new AiError('NETWORK', msg)
 }
 
-export const AI_TIMEOUT_MS = 15_000
+export const AI_TIMEOUT_MS = 60_000
 
 export async function askAi(
   provider: AiProvider,

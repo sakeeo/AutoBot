@@ -110,7 +110,8 @@ export class ReplyPipeline extends EventEmitter {
   }
 
   private takeover(m: IncomingMessage): void {
-    this.d.conv.pauseFor(m.chatId, 'manusia', this.d.brand().limits.pauseHours)
+    // A person who took the chat over from the app stays in charge with no time limit; typing on the phone must not shorten that.
+    if (!this.d.conv.isTakenOver(m.chatId)) this.d.conv.pauseFor(m.chatId, 'manusia', this.d.brand().limits.pauseHours)
     this.d.conv.appendTurn(m.chatId, 'admin', m.text ?? '(pesan non-teks)')
     this.record(() => this.d.feed?.recordHuman(m))
   }
@@ -158,8 +159,13 @@ export class ReplyPipeline extends EventEmitter {
     if (m.isGroup && !s.allowGroups) return ignored('group')
     // An opt-out counts however old it is and even while a human is handling the chat, so this runs first.
     if (this.d.optOut && (await this.d.optOut.handle(m))) return ignored('opt_out')
+    const paused = this.d.conv.isPaused(m.chatId)
+    // While a person (or an admin handoff) holds the chat the bot stays quiet, but it still reads along: the customer's
+    // message goes into the conversation history so the bot understands the thread when it is handed back.
+    // (The message id was claimed before this point, so a redelivery cannot be recorded twice.)
+    if (paused) this.d.conv.appendTurn(m.chatId, 'user', m.text.trim() === '' ? '(pesan non-teks)' : m.text)
     if (this.d.clock.now() - m.timestamp > STALE_MS) return ignored('stale')
-    if (this.d.conv.isPaused(m.chatId)) return ignored('human')
+    if (paused) return ignored('human')
 
     // AI mode: the conversation agent answers. It has no per-contact cooldown (customers send several
     // short messages in a row) but is held to an hourly reply limit.
@@ -196,10 +202,12 @@ export class ReplyPipeline extends EventEmitter {
       return { result: { kind: 'ignored', why: 'rate_limit' }, top: null, sources: [] }
 
     const r = await this.d.agent.handleTurn({
-      chatId: m.chatId, text: m.text ?? '', profile, provider, cfg: s.ai, dryRun: false
+      chatId: m.chatId, text: m.text ?? '', profile, provider, cfg: s.ai, dryRun: false, memory: s.memoryEnabled
     })
     const bubbles = splitBubbles(r.replyParts)
     for (const b of bubbles) await this.send(m.chatId, b, typingMsFor(b, this.d.rand))
+    // The customer already has their answer; writing the summary happens afterwards and can never delay or break it.
+    if (s.memoryEnabled) void this.d.agent.maybeFold({ chatId: m.chatId, provider, cfg: s.ai }).catch(() => undefined)
 
     const top = r.hits[0]?.coverage ?? null
     if (r.handoff) return { result: { kind: 'handoff', reason: r.handoff.reason }, top, sources: r.sources }
@@ -219,10 +227,11 @@ export class ReplyPipeline extends EventEmitter {
     const provider = s.mode === 'ai' ? this.d.ai() : null
     if (provider) {
       const agent = await this.d.agent.handleTurn({
-        chatId: '__preview__', text, profile: this.d.brand(), provider, cfg: s.ai, dryRun: true
+        chatId: '__preview__', text, profile: this.d.brand(), provider, cfg: s.ai, dryRun: true, memory: s.memoryEnabled
       })
+      // The AI decides by intent, not by retrieval: a greeting or thanks needs no document and is still answered.
       const decision: Decision =
-        agent.intent === 'di_luar_konteks' || agent.hits.length === 0
+        agent.intent === 'di_luar_konteks'
           ? { kind: 'out_of_context', reason: agent.hits.length === 0 ? 'no_hits' : 'below_threshold' }
           : { kind: 'answerable', hits: agent.hits }
       const answer = agent.replyParts.length
@@ -259,6 +268,25 @@ export class ReplyPipeline extends EventEmitter {
     }
     for (const p of pending) if (p.id !== sentId) this.takeover(p)
     return sentId
+  }
+
+  /**
+   * A person answers from the app. The chat is taken over first (the bot goes quiet, with no time limit), and the
+   * message is registered as in flight so its echo from WhatsApp is not mistaken for typing on the phone.
+   */
+  async adminSend(chatId: string, text: string): Promise<void> {
+    this.d.conv.takeOver(chatId)
+    const pending: IncomingMessage[] = []
+    this.inflight.set(chatId, pending)
+    let sentId: string | null = null
+    try {
+      sentId = await this.d.gateway.sendText(chatId, text)
+      if (sentId) this.d.conv.rememberSentId(sentId)
+      this.d.conv.appendTurn(chatId, 'admin', text)
+      this.record(() => this.d.feed?.recordAdmin(chatId, text, sentId))
+    } finally {
+      this.inflight.delete(chatId)
+    }
   }
 
   /** A system reply (e.g. the unsubscribe confirmation): recorded in the feed and never mistaken for a human. */

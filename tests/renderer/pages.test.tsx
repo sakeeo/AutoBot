@@ -21,7 +21,7 @@ const settings: Settings = {
   ai: { provider: 'claude', model: 'claude-haiku-5-5', maxTokens: 400 },
   autoStart: false,
   theme: 'auto',
-  notifyIncoming: true
+  notifyIncoming: true, memoryEnabled: true
 }
 
 function makeApi(over: Record<string, unknown> = {}) {
@@ -39,6 +39,7 @@ function makeApi(over: Record<string, unknown> = {}) {
     testQuestion: vi.fn(),
     saveApiKey: vi.fn().mockResolvedValue({ ok: true }),
     hasApiKey: vi.fn().mockResolvedValue(false),
+    listModels: vi.fn().mockResolvedValue({ ok: true, models: ['deepseek-chat', 'deepseek-reasoner'] }),
     deleteApiKey: vi.fn().mockResolvedValue(undefined),
     openConsole: vi.fn().mockResolvedValue(undefined),
     getLog: vi.fn().mockResolvedValue([]),
@@ -159,17 +160,44 @@ describe('AiSettings', () => {
     render(<AiSettings />)
     const input = (await screen.findByLabelText(/api key/i)) as HTMLInputElement
     fireEvent.change(input, { target: { value: key } })
-    fireEvent.click(screen.getByRole('button', { name: /uji & simpan/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Hubungkan' }))
     await waitFor(() => expect(api.saveApiKey).toHaveBeenCalledWith(key))
     await waitFor(() => expect(input.value).toBe(''))
     await waitFor(() => expect((screen.getByLabelText(/gunakan ai/i) as HTMLInputElement).disabled).toBe(false))
     expect(document.body.textContent).not.toContain(key)
   })
+  it('shows no model choice until connected, then offers the provider list and saves the pick', async () => {
+    let has = false
+    const api = setApi({
+      hasApiKey: vi.fn().mockImplementation(async () => has),
+      saveApiKey: vi.fn().mockImplementation(async () => { has = true; return { ok: true, models: ['deepseek-chat', 'deepseek-reasoner'] } })
+    })
+    render(<AiSettings />)
+    await screen.findByLabelText(/api key/i)
+    expect(screen.getByText(/hubungkan api key dulu/i)).toBeTruthy()
+    expect(screen.queryByLabelText('Model')).toBeNull()
+    fireEvent.change(screen.getByLabelText(/api key/i), { target: { value: 'sk-' + 'k'.repeat(24) } })
+    fireEvent.click(screen.getByRole('button', { name: 'Hubungkan' }))
+    const select = (await screen.findByLabelText('Model')) as HTMLSelectElement
+    expect([...select.options].map((o) => o.value)).toEqual(['deepseek-chat', 'deepseek-reasoner'])
+    fireEvent.change(select, { target: { value: 'deepseek-reasoner' } })
+    await waitFor(() => expect(api.updateSettings).toHaveBeenCalledWith({ ai: expect.objectContaining({ model: 'deepseek-reasoner' }) }))
+  })
+  it('falls back to typing the model name when the provider cannot list models', async () => {
+    setApi({
+      hasApiKey: vi.fn().mockResolvedValue(true),
+      listModels: vi.fn().mockResolvedValue({ ok: false, error: 'Penyedia ini tidak menyediakan daftar model.' })
+    })
+    render(<AiSettings />)
+    const input = (await screen.findByLabelText('Model')) as HTMLInputElement
+    expect(input.tagName).toBe('INPUT')
+    expect(await screen.findByText(/tidak menyediakan daftar model/i)).toBeTruthy()
+  })
   it('shows the provider error and does not enable AI when saving fails', async () => {
     setApi({ saveApiKey: vi.fn().mockResolvedValue({ ok: false, error: 'API key ditolak oleh penyedia.' }) })
     render(<AiSettings />)
     fireEvent.change(await screen.findByLabelText(/api key/i), { target: { value: 'sk-ant-' + 'q'.repeat(20) } })
-    fireEvent.click(screen.getByRole('button', { name: /uji & simpan/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Hubungkan' }))
     expect(await screen.findByText(/ditolak oleh penyedia/i)).toBeTruthy()
     expect((screen.getByLabelText(/gunakan ai/i) as HTMLInputElement).disabled).toBe(true)
   })

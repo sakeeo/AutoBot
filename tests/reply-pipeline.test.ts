@@ -55,7 +55,7 @@ function setup(opts: { ai?: AiProvider | null } = {}) {
   const make = (database = db) => {
     const conv = new ConversationStore(database, clock)
     const handoff = new HandoffService({ gateway, conv, clock })
-    const agent = new ConversationAgent({ store, catalog: new CatalogStore(database), conv, handoff, gateway, clock })
+    const agent = new ConversationAgent({ store, catalog: new CatalogStore(database), conv, handoff, gateway, clock, retryDelaysMs: [0, 0] })
     return new ReplyPipeline({
       gateway, store, settings, db: database,
       ai: () => opts.ai ?? null,
@@ -181,6 +181,83 @@ describe('ReplyPipeline human takeover', () => {
     expect(await t.pipeline.handle(t.msg())).toEqual({ kind: 'ignored', why: 'human' })
     expect(t.gateway.sent).toHaveLength(0)
   })
+  it('a chat taken over from the app stays silent past the usual pause until it is handed back', async () => {
+    const t = setup()
+    const C = '6281@s.whatsapp.net'
+    t.conv.takeOver(C)
+    t.clock.t += 5 * 24 * HOUR
+    expect(await t.pipeline.handle(t.msg())).toEqual({ kind: 'ignored', why: 'human' })
+    t.conv.resume(C)
+    expect(await t.pipeline.handle(t.msg())).toMatchObject({ kind: 'replied' })
+  })
+  it('typing from the phone does not turn a takeover from the app into a timed pause', async () => {
+    const t = setup()
+    const C = '6281@s.whatsapp.net'
+    t.conv.takeOver(C)
+    await t.pipeline.handle(human(t))
+    expect(t.conv.isTakenOver(C)).toBe(true)
+    t.clock.t += 7 * HOUR
+    expect(await t.pipeline.handle(t.msg())).toEqual({ kind: 'ignored', why: 'human' })
+  })
+  it('a message sent from the app takes the chat over, shows as admin, and its echo changes nothing', async () => {
+    const t = setup()
+    const C = '6281@s.whatsapp.net'
+    await t.pipeline.adminSend(C, 'Halo Kak, saya admin')
+    expect(t.gateway.sent).toEqual([{ chatId: C, text: 'Halo Kak, saya admin', typingMs: undefined }])
+    expect(t.conv.isTakenOver(C)).toBe(true)
+    expect(t.conv.recentTurns(C, 1)[0]).toMatchObject({ role: 'admin', text: 'Halo Kak, saya admin' })
+    expect(t.feed.thread(C).map((m) => [m.direction, m.text])).toEqual([['human', 'Halo Kak, saya admin']])
+    expect(await t.pipeline.handle(t.msg({ fromMe: true, id: 'm-1', text: 'Halo Kak, saya admin' }))).toEqual({ kind: 'ignored', why: 'from_me' })
+    expect(await t.pipeline.handle(t.msg())).toEqual({ kind: 'ignored', why: 'human' })
+  })
+  it('taking over resolves an open handoff; the chat list shows who handles it', async () => {
+    const t = setup()
+    const C = '6281@s.whatsapp.net'
+    t.conv.recordHandoff(C, 'komplain')
+    t.conv.takeOver(C)
+    expect(t.db.prepare('SELECT status FROM handoffs WHERE chat_id = ?').get(C)).toEqual({ status: 'resolved' })
+    t.feed.recordAdmin(C, 'halo', null)
+    expect(t.feed.chats()[0].handling).toBe('manusia')
+    t.conv.resume(C)
+    expect(t.feed.chats()[0].handling).toBe('bot')
+    t.conv.pauseFor(C, 'menunggu_admin', 6)
+    expect(t.feed.chats()[0].handling).toBe('menunggu_admin')
+    t.clock.t += 7 * HOUR
+    expect(t.feed.chats()[0].handling).toBe('bot')
+  })
+  it('while a person holds the chat, the customer messages are still recorded in the history, unanswered', async () => {
+    const t = setup()
+    const C = '6281@s.whatsapp.net'
+    t.conv.takeOver(C)
+    expect(await t.pipeline.handle(t.msg({ text: 'mau tanya paket website' }))).toEqual({ kind: 'ignored', why: 'human' })
+    await t.pipeline.handle(t.msg({ fromMe: true, id: 'HUMAN-5', text: 'Boleh Kak, ada dua paket' }))
+    await t.pipeline.handle(t.msg({ text: 'yang murah aja' }))
+    expect(t.gateway.sent).toHaveLength(0)
+    expect(t.conv.recentTurns(C, 10).map((x) => `${x.role}: ${x.text}`)).toEqual([
+      'user: mau tanya paket website', 'admin: Boleh Kak, ada dua paket', 'user: yang murah aja'
+    ])
+  })
+  it('records each customer message once even if it is delivered twice, and also during an admin handoff', async () => {
+    const t = setup()
+    const C = '6281@s.whatsapp.net'
+    t.conv.pauseFor(C, 'menunggu_admin', 6)
+    const m = t.msg({ id: 'DUP-1', text: 'halo' })
+    await t.pipeline.handle(m)
+    await t.pipeline.handle(m)
+    expect(t.conv.recentTurns(C, 10).map((x) => x.text)).toEqual(['halo'])
+  })
+  it('does not record anything while the bot is in charge (the agent does that itself)', async () => {
+    const t = setup()
+    await t.pipeline.handle(t.msg({ text: 'berapa harga kopi?' }))
+    expect(t.conv.recentTurns('6281@s.whatsapp.net', 10)).toEqual([])
+  })
+  it('records a customer message that waited while the app was closed, but does not answer it', async () => {
+    const t = setup()
+    const C = '6281@s.whatsapp.net'
+    t.conv.takeOver(C)
+    expect(await t.pipeline.handle(t.msg({ text: 'pesan lama', timestamp: t.clock.now() - HOUR }))).toEqual({ kind: 'ignored', why: 'stale' })
+    expect(t.conv.recentTurns(C, 10).map((x) => x.text)).toEqual(['pesan lama'])
+  })
   it('resumes answering after the pause expires', async () => {
     const t = setup()
     await t.pipeline.handle(human(t))
@@ -293,6 +370,55 @@ describe('ReplyPipeline ai mode (conversation agent)', () => {
   }
   const e401 = () => Object.assign(new Error('x'), { status: 401 })
 
+  it('sends the reply first, then writes the summary; a failing summary never changes the result', async () => {
+    const order: string[] = []
+    const reply = agentOut({ reply_parts: ['Halo Kak'], intent: 'sapaan', sources: [] })
+    const provider: AiProvider = {
+      complete: async (req) => {
+        if (req.system.includes('merangkum percakapan')) { order.push('ringkas'); throw new Error('down') }
+        order.push('balas'); return reply
+      }
+    }
+    const t = setup({ ai: provider })
+    t.settings.update({ mode: 'ai' })
+    for (let i = 0; i < 20; i++) t.conv.appendTurn('6281@s.whatsapp.net', i % 2 ? 'bot' : 'user', `lama ${i}`)
+    const r = await t.pipeline.handle(t.msg({ text: 'halo' }))
+    expect(r).toMatchObject({ kind: 'replied', via: 'ai' })
+    expect(t.gateway.sent.map((s) => s.text)).toEqual(['Halo Kak'])
+    await new Promise((res) => setTimeout(res, 20))
+    expect(order).toEqual(['balas', 'ringkas'])
+  })
+  it('does not summarize when memory is switched off', async () => {
+    let summaries = 0
+    const provider: AiProvider = {
+      complete: async (req) => {
+        if (req.system.includes('merangkum percakapan')) summaries++
+        return agentOut({ reply_parts: ['Halo Kak'], intent: 'sapaan', sources: [] })
+      }
+    }
+    const t = setup({ ai: provider })
+    t.settings.update({ mode: 'ai', memoryEnabled: false })
+    for (let i = 0; i < 20; i++) t.conv.appendTurn('6281@s.whatsapp.net', i % 2 ? 'bot' : 'user', `lama ${i}`)
+    await t.pipeline.handle(t.msg({ text: 'halo' }))
+    await new Promise((res) => setTimeout(res, 20))
+    expect(summaries).toBe(0)
+  })
+  it('after a hand-back the bot sees what the customer wrote while a person was in charge', async () => {
+    const { t, calls } = aiSetup([agentOut({ reply_parts: ['Siap Kak, yang paket murah ya'], intent: 'sapaan', sources: [] })])
+    const C = '6281@s.whatsapp.net'
+    t.conv.takeOver(C)
+    await t.pipeline.handle(t.msg({ text: 'mau tanya paket website' }))
+    await t.pipeline.handle(t.msg({ fromMe: true, id: 'HUMAN-7', text: 'Ada paket murah dan lengkap, Kak' }))
+    await t.pipeline.handle(t.msg({ text: 'yang itu aja' }))
+    expect(calls).toHaveLength(0)
+    t.conv.resume(C)
+    const r = await t.pipeline.handle(t.msg({ text: 'oke, yang murah' }))
+    expect(r).toMatchObject({ kind: 'replied', via: 'ai' })
+    const prompt = calls[0].user
+    expect(prompt).toContain('pelanggan: mau tanya paket website')
+    expect(prompt).toContain('admin: Ada paket murah dan lengkap, Kak')
+    expect(prompt).toContain('pelanggan: yang itu aja')
+  })
   it('sends the model reply as separate bubbles, in order, with human-like typing delays', async () => {
     const { t } = aiSetup([agentOut({ reply_parts: ['Kopi susu Rp25.000 per gelas ya Kak', 'Mau saya bantu pesan?'] })])
     const r = await t.pipeline.handle(t.msg())
@@ -352,11 +478,10 @@ describe('ReplyPipeline ai mode (conversation agent)', () => {
     expect(t.gateway.sent).toHaveLength(1)
     expect(t.gateway.sent[0].text).not.toMatch(/error|json|401/i)
   })
-  it('says it does not know when the provider fails for a product business', async () => {
+  it('also hands off for a product business once every attempt has failed', async () => {
     const { t } = aiSetup([e401()])
     t.brand.businessType = 'produk'
-    expect(await t.pipeline.handle(t.msg())).toEqual({ kind: 'out_of_context', action: 'reply' })
-    expect(t.gateway.sent[0].text).toContain('kurang tahu')
+    expect(await t.pipeline.handle(t.msg())).toEqual({ kind: 'handoff', reason: 'ai_gagal' })
   })
   it('falls back to the plain extractive answer when no provider is configured', async () => {
     const t = setup({ ai: null })
@@ -369,6 +494,13 @@ describe('ReplyPipeline ai mode (conversation agent)', () => {
     await t.pipeline.handle(m)
     const row = t.db.prepare('SELECT decision FROM message_log WHERE message_id = ?').get(m.id) as { decision: string }
     expect(row.decision).toBe('handoff:komplain')
+  })
+  it('previews a greeting as answerable even though it retrieves no document', async () => {
+    const { t } = aiSetup([agentOut({ intent: 'sapaan', reply_parts: ['Halo! Ada yang bisa kami bantu?'], sources: [] })])
+    const p = await t.pipeline.preview('hslo ksk')
+    expect(p.decision.kind).toBe('answerable')
+    expect(p.answer?.text).toContain('Halo!')
+    expect(p.agent?.intent).toBe('sapaan')
   })
   it('previews an ai turn without sending, storing or handing off', async () => {
     const { t } = aiSetup([agentOut({ intent: 'komplain', sources: [] })])

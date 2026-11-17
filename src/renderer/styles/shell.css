@@ -1,14 +1,14 @@
 /* App shell: sidebar, top bar, content (design-guide §4–5). Colours come only from tokens.css. */
-.app-shell { display: flex; min-height: 100vh; background: var(--color-background); }
+.app-shell { display: flex; min-height: calc(100vh - var(--titlebar-h)); background: var(--color-background); }
 
 .app-sidebar {
   width: 220px; flex: none; display: flex; flex-direction: column; gap: var(--space-1);
   padding: var(--space-4) var(--space-3);
   background: var(--color-primary); color: var(--color-sidebar-text);
-  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  position: sticky; top: var(--titlebar-h); height: calc(100vh - var(--titlebar-h)); overflow-y: auto;
 }
-.app-sidebar.is-drawer { position: fixed; left: 0; top: 0; z-index: 1040; box-shadow: var(--shadow-card); }
-.app-backdrop { position: fixed; inset: 0; z-index: 1039; background: var(--color-overlay); opacity: 0.45; }
+.app-sidebar.is-drawer { position: fixed; left: 0; top: var(--titlebar-h); height: calc(100vh - var(--titlebar-h)); z-index: 1040; box-shadow: var(--shadow-card); }
+.app-backdrop { position: fixed; inset: var(--titlebar-h) 0 0 0; z-index: 1039; background: var(--color-overlay); opacity: 0.45; }
 
 .sidebar-brand {
   display: flex; align-items: center; gap: var(--space-2);
@@ -33,7 +33,7 @@
 
 .app-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .app-topbar {
-  position: sticky; top: 0; z-index: 1020; height: 56px; flex: none;
+  position: sticky; top: var(--titlebar-h); z-index: 1020; height: 56px; flex: none;
   display: flex; align-items: center; gap: var(--space-3); padding: 0 var(--space-6);
   background: var(--color-surface); border-bottom: 1px solid var(--color-border);
 }
@@ -75,3 +75,24 @@
 .sidebar-sub { margin-left: var(--space-4); }
 
 .sidebar-nav { display: flex; flex-direction: column; gap: var(--space-1); }
+
+.sidebar-brand > span { display: flex; flex-direction: column; line-height: 1.2; }
+.sidebar-name { font-size: 1.0625rem; font-weight: 700; }
+.sidebar-tagline { margin-top: var(--space-1); font-size: 0.6875rem; font-weight: 400; color: var(--color-sidebar-muted); }
+
+/* Custom title bar: the whole strip drags the window, the buttons do not. */
+.app-titlebar {
+  position: sticky; top: 0; z-index: 2000; height: var(--titlebar-h); display: flex; align-items: center;
+  background: var(--color-primary-dark); color: var(--color-sidebar-text);
+  -webkit-app-region: drag; user-select: none;
+}
+.titlebar-title { display: flex; align-items: center; gap: var(--space-2); padding-left: var(--space-3); font-size: 0.75rem; font-weight: 600; }
+.titlebar-spacer { flex: 1; }
+.titlebar-controls { display: flex; height: 100%; -webkit-app-region: no-drag; }
+.titlebar-btn {
+  width: 46px; height: 100%; border: 0; background: transparent; color: inherit;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 0.8125rem;
+}
+.titlebar-btn:hover { background: var(--color-sidebar-hover); color: var(--color-on-primary); }
+.titlebar-btn.is-close:hover { background: var(--color-danger); color: var(--color-on-primary); }
+.titlebar-btn:focus-visible { outline: 2px solid var(--color-on-primary); outline-offset: -2px; }

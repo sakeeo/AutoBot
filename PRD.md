@@ -1,4 +1,6 @@
-# PRD — WA Otomation (WhatsApp Bot Desktop App)
+# PRD — AutoBot (WhatsApp Bot Desktop App)
+
+> **Brand:** AutoBot · **Tagline:** Balas WA Otomatis pakai AI
 
 | | |
 |---|---|
@@ -11,7 +13,7 @@
 
 ## 1. Ringkasan
 
-WA Otomation adalah aplikasi desktop untuk mengotomatisasi WhatsApp: auto-reply, broadcast terjadwal, dan manajemen kontak/percakapan, tanpa perlu server atau hosting. Aplikasi terhubung ke WhatsApp sebagai *linked device* (scan QR) lewat library Baileys, dan semua data tersimpan lokal di komputer pengguna.
+AutoBot adalah aplikasi desktop untuk mengotomatisasi WhatsApp: auto-reply, broadcast terjadwal, dan manajemen kontak/percakapan, tanpa perlu server atau hosting. Aplikasi terhubung ke WhatsApp sebagai *linked device* (scan QR) lewat library Baileys, dan semua data tersimpan lokal di komputer pengguna.
 
 ### Masalah
 - UMKM dan tim kecil membalas pesan pelanggan yang berulang secara manual.

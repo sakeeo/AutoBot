@@ -10,6 +10,7 @@ import {
 import type { WaGateway } from '../wa/gateway'
 import { AiError, type AiProvider } from '../answer/ai-answerer'
 import { runAgent, type AgentContext } from '../answer/agent'
+import { MEMORY, applyFactUpdates, foldSummary, planFold } from '../conversation/memory'
 import { evaluateRules, LOW_CONFIDENCE, type ChosenAction, type RuleFacts } from '../policy/rules'
 import { removeCtaSentences, removeSelfNumber, sanitizeChunk, stripDisallowedUrls, unknownNumbers } from '../policy/guards'
 
@@ -22,6 +23,8 @@ export interface AgentTurnInput {
   /** No side effects at all: nothing stored, no handoff, no events (used by the preview panel). */
   dryRun: boolean
   timeoutMs?: number
+  /** Read and write what is remembered about this customer. Default true. */
+  memory?: boolean
 }
 
 export interface AgentTurnResult {
@@ -34,6 +37,10 @@ export interface AgentTurnResult {
   matchedRule: string | null
   removed: { numbers: boolean; urls: string[]; numbersUnknown: string[]; cta: boolean }
   fallback: boolean
+  /** How many times the AI was tried before giving up; set only when `fallback` is true. */
+  attempts?: number
+  /** Why the AI's answer was not used; set only when `fallback` is true. */
+  fallbackReason?: 'timeout' | 'auth' | 'rate_limit' | 'network' | 'unusable'
   hits: Hit[]
 }
 
@@ -68,6 +75,9 @@ function cleanLead(updates: Record<string, string>): Record<string, string> {
 }
 
 export class ConversationAgent {
+  /** Chats whose summary is being written right now: one at a time per chat. */
+  private folding = new Set<string>()
+
   constructor(
     private d: {
       store: IndexStore
@@ -76,8 +86,37 @@ export class ConversationAgent {
       handoff: HandoffService
       gateway: WaGateway
       clock: { now(): number }
+      /** Waits between attempts when the AI fails; one more attempt follows each wait. Default: 2 s, then 5 s (3 tries). */
+      retryDelaysMs?: number[]
     }
   ) {}
+
+  /**
+   * Folds old turns into the customer's summary when there are too many or a long silence has passed. Runs after the
+   * reply has gone out. Never throws; on any failure nothing changes and a later call tries again.
+   */
+  async maybeFold(i: { chatId: string; provider: AiProvider; cfg: { model: string } }): Promise<boolean> {
+    const { chatId } = i
+    if (this.folding.has(chatId)) return false
+    this.folding.add(chatId)
+    try {
+      const { conv } = this.d
+      const turns = conv.unsummarizedTurns(chatId)
+      const plan = planFold(turns)
+      if (!plan) return false
+      const memory = conv.getMemory(chatId)
+      const text = await foldSummary(i.provider, i.cfg, {
+        prev: memory.summary, facts: memory.facts, turns: turns.filter((t) => t.id <= plan.upToId)
+      })
+      if (!text) return false
+      conv.setSummary(chatId, text, plan.upToId)
+      return true
+    } catch {
+      return false
+    } finally {
+      this.folding.delete(chatId)
+    }
+  }
 
   async handleTurn(i: AgentTurnInput): Promise<AgentTurnResult> {
     const { profile, chatId, text, dryRun } = i
@@ -85,7 +124,12 @@ export class ConversationAgent {
     const now = this.d.clock.now()
     const botNumber = this.d.gateway.selfNumber()
     const state = conv.getState(chatId)
-    const history = conv.recentTurns(chatId, HISTORY_TURNS)
+    const useMemory = i.memory !== false
+    // With memory on, only turns not yet folded into the summary are shown, each trimmed so the prompt stays small.
+    const history = useMemory
+      ? conv.unsummarizedTurns(chatId, MEMORY.stmTurns).map((t) => ({ role: t.role, text: t.text.slice(0, MEMORY.stmChars) }))
+      : conv.recentTurns(chatId, HISTORY_TURNS)
+    const memory = useMemory ? conv.getMemory(chatId) : null
 
     const hits = this.retrieve(text, history)
       .map((h) => ({ ...h, text: sanitizeChunk(h.text, botNumber) }))
@@ -100,17 +144,29 @@ export class ConversationAgent {
     const allowlist = buildLinkAllowlist(profile, allProducts)
 
     const ctx: AgentContext = {
-      profile, message: text, hits, products, lead: state.lead, stage: state.stage, history, withinHours, botNumber
+      profile, message: text, hits, products, lead: state.lead, stage: state.stage, history, withinHours, botNumber,
+      ...(memory && (memory.summary || Object.keys(memory.facts).length) ? { memory: { summary: memory.summary, facts: memory.facts } } : {})
     }
 
-    let out
-    try {
-      out = await runAgent(i.provider, ctx, i.cfg, i.timeoutMs)
-    } catch (e) {
-      if (!(e instanceof AiError)) throw e
-      out = null
+    // A failed or unusable answer is retried with a pause in between. A rejected key will not fix itself, so it is not.
+    const delays = this.d.retryDelaysMs ?? [2_000, 5_000]
+    let out: Awaited<ReturnType<typeof runAgent>> = null
+    let failure: NonNullable<AgentTurnResult['fallbackReason']> = 'unusable'
+    let attempts = 0
+    for (;;) {
+      attempts++
+      try {
+        out = await runAgent(i.provider, ctx, i.cfg, i.timeoutMs)
+        failure = 'unusable'
+      } catch (e) {
+        if (!(e instanceof AiError)) throw e
+        failure = e.code === 'RATE_LIMIT' ? 'rate_limit' : (e.code.toLowerCase() as 'timeout' | 'auth' | 'network')
+        out = null
+      }
+      if (out || failure === 'auth' || attempts > delays.length) break
+      await new Promise<void>((r) => setTimeout(r, delays[attempts - 1]))
     }
-    if (!out) return this.fallback(i, state, hits, now)
+    if (!out) return this.fallback(i, state, hits, now, failure, attempts)
 
     const updates = cleanLead(out.lead_updates)
     const lead = { ...state.lead, ...updates }
@@ -151,6 +207,7 @@ export class ConversationAgent {
         ...allProducts.map((p) => `${p.name} ${p.price ?? ''} ${p.description}`),
         text,
         ...history.map((t) => t.text),
+        ...(memory ? [memory.summary, ...Object.values(memory.facts)] : []),
         ...Object.values(lead),
         ...profile.objections.map((o) => o.answer),
         profile.identity.about
@@ -192,6 +249,10 @@ export class ConversationAgent {
       if (leadChanged) {
         conv.mergeLead(chatId, updates)
         conv.recordEvent(chatId, 'lead_updated')
+      }
+      if (memory) {
+        const facts = applyFactUpdates(memory.facts, out.memory_updates)
+        if (JSON.stringify(facts) !== JSON.stringify(memory.facts)) conv.setFacts(chatId, facts)
       }
       const progressed = out.stage !== state.stage || leadChanged || (!!productId && productId !== state.productId)
       conv.patchState(chatId, {
@@ -303,34 +364,27 @@ export class ConversationAgent {
     return [...own, ...extra].slice(0, 5)
   }
 
-  /** The AI failed (provider error or unusable output): a service business hands off, a shop says it does not know. */
+  /** The AI failed on every attempt: the conversation goes to a person. */
   private async fallback(
-    i: AgentTurnInput, state: ContactState, hits: Hit[], now: number
+    i: AgentTurnInput, state: ContactState, hits: Hit[], now: number, reason: NonNullable<AgentTurnResult['fallbackReason']>,
+    attempts: number
   ): Promise<AgentTurnResult> {
     const { profile, chatId, text, dryRun } = i
     const { conv } = this.d
-    const vars = this.vars(profile, state.lead, null)
     if (!dryRun) {
       conv.appendTurn(chatId, 'user', text)
       conv.patchState(chatId, { lowConfidenceStreak: state.lowConfidenceStreak + 1 })
     }
-    let replyParts: string[]
-    let handoff: { reason: string } | null = null
-    let action: ChosenAction = { kind: 'reply_only', ruleId: null, forced: false }
-    if (profile.businessType === 'jasa') {
-      handoff = { reason: 'ai_gagal' }
-      action = { kind: 'handoff', ruleId: null, forced: true, reason: 'ai_gagal' }
-      const farewell = dryRun
-        ? farewellText(profile, now, null, state.lead)
-        : (await this.d.handoff.trigger({ profile, chatId, reason: 'ai_gagal', productName: null })).farewell
-      replyParts = [farewell]
-    } else {
-      replyParts = [fillTemplate(profile.templates.unknown, vars)]
-    }
+    const handoff = { reason: 'ai_gagal' }
+    const action: ChosenAction = { kind: 'handoff', ruleId: null, forced: true, reason: 'ai_gagal' }
+    const farewell = dryRun
+      ? farewellText(profile, now, null, state.lead)
+      : (await this.d.handoff.trigger({ profile, chatId, reason: 'ai_gagal', productName: null })).farewell
+    const replyParts = [farewell]
     if (!dryRun) conv.appendTurn(chatId, 'bot', replyParts.join('\n'))
     return {
       intent: 'di_luar_konteks', action, replyParts, linkSent: null, handoff, sources: [], matchedRule: null,
-      removed: { numbers: false, urls: [], numbersUnknown: [], cta: false }, fallback: true, hits
+      removed: { numbers: false, urls: [], numbersUnknown: [], cta: false }, fallback: true, attempts, fallbackReason: reason, hits
     }
   }
 

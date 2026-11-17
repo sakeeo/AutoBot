@@ -11,6 +11,8 @@ export interface WaGateway {
   onWhatsApp(numbers: string[]): Promise<{ number: string; jid: string | null; exists: boolean }[]>
   /** Digits of the number this bot is linked to, or null while disconnected. */
   selfNumber(): string | null
+  /** The phone jid WhatsApp has on record for a lid jid, or null when it does not know. */
+  phoneJidForLid?(lid: string): Promise<string | null>
   /** Chat id (jid) for any phone number format. */
   jidFor(number: string): string
   connect(): Promise<void>

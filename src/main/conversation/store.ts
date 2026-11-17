@@ -29,6 +29,13 @@ interface ContactRow {
   rule_counts: string
 }
 
+export interface ContactMemory {
+  summary: string
+  facts: Record<string, string>
+  /** Id of the last turn already folded into the summary. */
+  summarizedUpTo: number
+}
+
 const MAX_TURN_CHARS = 1000
 const HOUR_MS = 3_600_000
 
@@ -46,6 +53,58 @@ export class ConversationStore {
       .prepare('SELECT role, text FROM turns WHERE chat_id = ? ORDER BY id DESC LIMIT ?')
       .all(chatId, n) as { role: TurnRole; text: string }[]
     return rows.reverse()
+  }
+
+  /** Turns not yet folded into the summary, oldest first; `limit` keeps only the newest ones. */
+  unsummarizedTurns(chatId: string, limit = 1000): { id: number; role: TurnRole; text: string; at: number }[] {
+    const rows = this.db
+      .prepare(
+        `SELECT id, role, text, created_at AS at FROM turns
+         WHERE chat_id = ? AND id > COALESCE((SELECT summarized_up_to FROM contact_memory WHERE chat_id = ?), 0)
+         ORDER BY id DESC LIMIT ?`
+      )
+      .all(chatId, chatId, limit) as { id: number; role: TurnRole; text: string; at: number }[]
+    return rows.reverse()
+  }
+
+  getMemory(chatId: string): ContactMemory {
+    const r = this.db.prepare('SELECT summary, summarized_up_to, facts_json FROM contact_memory WHERE chat_id = ?').get(chatId) as
+      | { summary: string; summarized_up_to: number; facts_json: string }
+      | undefined
+    if (!r) return { summary: '', facts: {}, summarizedUpTo: 0 }
+    let facts: Record<string, string> = {}
+    try { facts = JSON.parse(r.facts_json) as Record<string, string> } catch { /* start clean */ }
+    return { summary: r.summary, facts, summarizedUpTo: r.summarized_up_to }
+  }
+
+  setFacts(chatId: string, facts: Record<string, string>): void {
+    this.db
+      .prepare(
+        `INSERT INTO contact_memory(chat_id, facts_json, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT(chat_id) DO UPDATE SET facts_json = excluded.facts_json, updated_at = excluded.updated_at`
+      )
+      .run(chatId, JSON.stringify(facts), this.clock.now())
+  }
+
+  /** Without `summarizedUpTo` the fold marker stays where it is (an edit by hand does not move it). */
+  setSummary(chatId: string, summary: string, summarizedUpTo?: number): void {
+    this.db
+      .prepare(
+        `INSERT INTO contact_memory(chat_id, summary, summarized_up_to, updated_at) VALUES (?, ?, ?, ?)
+         ON CONFLICT(chat_id) DO UPDATE SET summary = excluded.summary,
+           summarized_up_to = COALESCE(?, summarized_up_to), updated_at = excluded.updated_at`
+      )
+      .run(chatId, summary, summarizedUpTo ?? 0, this.clock.now(), summarizedUpTo ?? null)
+  }
+
+  /** Forgets the customer's memory only; the messages stay. Turns already summarised stay out of the prompt. */
+  clearMemory(chatId: string): void {
+    const m = this.getMemory(chatId)
+    this.db.prepare('DELETE FROM contact_memory WHERE chat_id = ?').run(chatId)
+    if (m.summarizedUpTo > 0)
+      this.db
+        .prepare('INSERT INTO contact_memory(chat_id, summarized_up_to, updated_at) VALUES (?, ?, ?)')
+        .run(chatId, m.summarizedUpTo, this.clock.now())
   }
 
   getState(chatId: string): ContactState {
@@ -73,6 +132,32 @@ export class ConversationStore {
 
   pauseFor(chatId: string, status: Exclude<ContactStatus, 'bot'>, hours: number): void {
     this.patchState(chatId, { status, pausedUntil: this.clock.now() + hours * HOUR_MS })
+  }
+
+  /** A person takes the chat over from the app: the bot stays silent until `resume`, with no time limit. */
+  takeOver(chatId: string): void {
+    this.patchState(chatId, { status: 'manusia', pausedUntil: null })
+    this.db
+      .prepare("UPDATE handoffs SET status = 'resolved', resolved_at = ? WHERE chat_id = ? AND status = 'open'")
+      .run(this.clock.now(), chatId)
+  }
+
+  /** Takes over or hands back many chats in one go. Only one-to-one customer chats count; the rest are skipped. */
+  setHandlingBulk(chatIds: string[], to: 'manusia' | 'bot'): number {
+    const ids = [...new Set(chatIds)].filter((id) => !id.endsWith('@g.us') && !id.endsWith('@broadcast'))
+    this.db.transaction(() => {
+      for (const id of ids) {
+        if (to === 'manusia') this.takeOver(id)
+        else this.resume(id)
+      }
+    })()
+    return ids.length
+  }
+
+  /** True while the bot is switched off for this chat by a person, with no end time. */
+  isTakenOver(chatId: string): boolean {
+    const s = this.getState(chatId)
+    return s.status === 'manusia' && s.pausedUntil === null
   }
 
   resume(chatId: string): void {

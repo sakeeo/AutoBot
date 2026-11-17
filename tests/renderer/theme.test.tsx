@@ -16,7 +16,7 @@ function setApi(theme: Settings['theme']) {
   current = {
     knowledgeFolders: ['/kb'], excludePatterns: [], mode: 'extractive',
     outOfContext: { action: 'reply', replyText: 'Maaf' }, threshold: 0.6, allowGroups: false, cooldownSec: 10,
-    ai: { provider: 'claude', model: 'claude-haiku-5-5', maxTokens: 400 }, autoStart: false, theme, notifyIncoming: true
+    ai: { provider: 'claude', model: 'claude-haiku-5-5', maxTokens: 400 }, autoStart: false, theme, notifyIncoming: true, memoryEnabled: true
   } as Settings
   const api = {
     authState: vi.fn().mockResolvedValue({ enabled: false, locked: false, username: null, autoLockMin: 0 }),

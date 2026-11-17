@@ -112,3 +112,53 @@ describe('sent ids, events and counters', () => {
     expect(conv.lastEventAt(C, 'link_sent', 'a')).toBeNull()
   })
 })
+
+describe('memory', () => {
+  it('is empty for a new chat and stores facts and the summary', () => {
+    const { conv } = setup()
+    expect(conv.getMemory(C)).toEqual({ summary: '', facts: {}, summarizedUpTo: 0 })
+    conv.setFacts(C, { budget: 'sekitar 5 juta' })
+    conv.setSummary(C, 'Tanya paket website.', 5)
+    expect(conv.getMemory(C)).toEqual({ summary: 'Tanya paket website.', facts: { budget: 'sekitar 5 juta' }, summarizedUpTo: 5 })
+    conv.setSummary(C, 'Diedit tangan.')
+    expect(conv.getMemory(C).summarizedUpTo).toBe(5)
+    conv.setFacts(C, {})
+    expect(conv.getMemory(C).summary).toBe('Diedit tangan.')
+  })
+  it('lists only turns after the fold marker, newest `limit` of them, oldest first', () => {
+    const { conv, clock } = setup()
+    for (let i = 1; i <= 8; i++) { conv.appendTurn(C, 'user', `p${i}`); clock.t += 1000 }
+    const all = conv.unsummarizedTurns(C)
+    expect(all.map((t) => t.text)).toEqual(['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'])
+    conv.setSummary(C, 's', all[2].id)
+    expect(conv.unsummarizedTurns(C).map((t) => t.text)).toEqual(['p4', 'p5', 'p6', 'p7', 'p8'])
+    expect(conv.unsummarizedTurns(C, 2).map((t) => t.text)).toEqual(['p7', 'p8'])
+    expect(conv.unsummarizedTurns('lain@s.whatsapp.net')).toEqual([])
+  })
+  it('forgetting clears summary and facts, keeps the turns, and does not bring old turns back into the prompt', () => {
+    const { conv } = setup()
+    for (let i = 1; i <= 4; i++) conv.appendTurn(C, 'user', `p${i}`)
+    conv.setFacts(C, { a: 'b' })
+    conv.setSummary(C, 'ringkasan', conv.unsummarizedTurns(C)[1].id)
+    conv.clearMemory(C)
+    const m = conv.getMemory(C)
+    expect(m.summary).toBe('')
+    expect(m.facts).toEqual({})
+    expect(conv.unsummarizedTurns(C).map((t) => t.text)).toEqual(['p3', 'p4'])
+  })
+})
+
+describe('bulk handling', () => {
+  it('takes over and hands back many chats at once, skipping groups and broadcast lists, counting each chat once', () => {
+    const { conv } = setup()
+    const a = '6281@s.whatsapp.net', b = '6282@s.whatsapp.net'
+    conv.recordHandoff(a, 'komplain')
+    expect(conv.setHandlingBulk([a, b, a, '99@g.us', 'status@broadcast'], 'manusia')).toBe(2)
+    expect(conv.isTakenOver(a)).toBe(true)
+    expect(conv.isTakenOver(b)).toBe(true)
+    expect(conv.getState('99@g.us').status).toBe('bot')
+    expect(conv.setHandlingBulk([a, b], 'bot')).toBe(2)
+    expect(conv.getState(a).status).toBe('bot')
+    expect(conv.getState(b).status).toBe('bot')
+  })
+})

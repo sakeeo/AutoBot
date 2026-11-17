@@ -280,7 +280,7 @@ export class BroadcastEngine extends EventEmitter {
     const now = clock.now()
     const skip = (r: string): void => { out.skipped[r] = (out.skipped[r] ?? 0) + 1 }
     let fresh = 0
-    for (const ct of store.audienceContacts(c.kind, c.audience)) {
+    for (const ct of store.campaignAudience(c)) {
       if (store.isSuppressed({ number: ct.number, jid: ct.jid })) { skip('tolak'); continue }
       if (ct.number === null) { skip('nomor_tidak_diketahui'); continue }
       const h = store.contactHistory(ct.id, now)

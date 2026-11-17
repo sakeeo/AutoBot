@@ -180,6 +180,20 @@ const MIGRATIONS: string[] = [
     at INTEGER NOT NULL
   );
   CREATE INDEX broadcast_events_kind ON broadcast_events(kind, at);
+  `,
+  // A lid chat id carries no phone number; keep the phone jid WhatsApp reports alongside it.
+  `ALTER TABLE messages ADD COLUMN alt_jid TEXT;`,
+  // Recipients picked by hand for a campaign (JSON array of contact ids); NULL means everyone in the audience.
+  `ALTER TABLE broadcast_campaigns ADD COLUMN contact_ids TEXT;`,
+  // What the bot remembers about a customer across conversations: a rolling summary and a few short facts.
+  `
+  CREATE TABLE contact_memory (
+    chat_id TEXT PRIMARY KEY,
+    summary TEXT NOT NULL DEFAULT '',
+    summarized_up_to INTEGER NOT NULL DEFAULT 0,
+    facts_json TEXT NOT NULL DEFAULT '{}',
+    updated_at INTEGER NOT NULL DEFAULT 0
+  );
   `
 ]
 

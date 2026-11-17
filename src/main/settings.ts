@@ -17,7 +17,8 @@ export const DEFAULT_SETTINGS: Settings = {
   ai: { provider: 'claude', model: 'claude-haiku-5-5', maxTokens: 400 },
   autoStart: false,
   theme: 'auto',
-  notifyIncoming: true
+  notifyIncoming: true,
+  memoryEnabled: true
 }
 
 export class SettingsStore {

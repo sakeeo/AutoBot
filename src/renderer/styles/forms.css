@@ -1,0 +1,15 @@
+/*
+ * Larger form boxes. design-guide §7 allows controls of 32–40 px; inputs and selects use the 40 px upper bound,
+ * with 14 px text (§3.2 body 12–14 px). Colours come from tokens.css.
+ */
+.form-control, .form-select {
+  min-height: 40px;
+  padding: 0.5rem 0.875rem;
+  font-size: 0.875rem;
+}
+textarea.form-control { min-height: 104px; line-height: 1.5; }
+.form-control-sm, .form-select-sm { min-height: 32px; padding: 0.25rem 0.625rem; font-size: 0.8125rem; }
+.form-label { margin-bottom: var(--space-2); }
+.form-check-input { width: 1.25em; height: 1.25em; margin-top: 0.125em; }
+.form-switch .form-check-input { width: 2.5em; }
+.input-group > .form-control, .input-group > .form-select, .input-group > .btn { min-height: 40px; }

@@ -58,6 +58,8 @@ const toView = (r: AgentTurnResult): AgentTurnView => ({
   matchedRule: r.matchedRule,
   removed: r.removed,
   fallback: r.fallback,
+  fallbackReason: r.fallbackReason,
+  attempts: r.attempts,
   hits: r.hits.map((h) => ({ file: h.file, text: h.text, coverage: h.coverage }))
 })
 

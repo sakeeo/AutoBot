@@ -1,13 +1,11 @@
 import { useState } from 'react'
 import { PageHeader } from '../ui/PageHeader'
 import { CampaignsTab } from '../broadcast/CampaignsTab'
-import { RecipientsTab } from '../broadcast/RecipientsTab'
 import { ReportTab } from '../broadcast/ReportTab'
 import { SafetyTab } from '../broadcast/SafetyTab'
 
 const TABS = [
   { id: 'campaigns', label: 'Kampanye' },
-  { id: 'recipients', label: 'Penerima' },
   { id: 'safety', label: 'Keamanan' },
   { id: 'report', label: 'Laporan' }
 ] as const
@@ -42,7 +40,6 @@ export function BroadcastPage() {
         ))}
       </ul>
       {tab === 'campaigns' && <CampaignsTab />}
-      {tab === 'recipients' && <RecipientsTab />}
       {tab === 'safety' && <SafetyTab />}
       {tab === 'report' && <ReportTab />}
     </div>

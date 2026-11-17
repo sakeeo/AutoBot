@@ -1,7 +1,8 @@
-import { useState } from 'react'
-import type { Audience, Campaign } from '../../shared/broadcast'
+import { useEffect, useState } from 'react'
+import type { Audience, BContact, Campaign } from '../../shared/broadcast'
 import { Card } from '../ui/Card'
 import { SKIP_LABEL } from './labels'
+import { RecipientPicker } from './RecipientPicker'
 
 const BIG = 50
 const FOOTER = 'Balas BERHENTI untuk tidak menerima pesan ini lagi.'
@@ -33,12 +34,41 @@ export function CampaignWizard({ onDone, onClose, draft }: { onDone(): void; onC
   const [typed, setTyped] = useState('')
   const [startError, setStartError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [contacts, setContacts] = useState<BContact[]>([])
+  const [excluded, setExcluded] = useState<Set<number>>(new Set())
+  const [loadingContacts, setLoadingContacts] = useState(true)
+  const [contactsError, setContactsError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let live = true
+    setLoadingContacts(true)
+    setContactsError(null)
+    Promise.resolve()
+      .then(() => window.api.bcAudienceContacts(audience))
+      .then((list) => {
+        if (!live) return
+        setContacts(list)
+        // A draft keeps the people it left out; any other audience starts with everyone ticked.
+        const picked = draft && draft.audience === audience && draft.contactIds ? new Set(draft.contactIds) : null
+        setExcluded(new Set(picked ? list.filter((c) => !picked.has(c.id)).map((c) => c.id) : []))
+      })
+      .catch(() => { if (live) { setContacts([]); setExcluded(new Set()); setContactsError('Daftar penerima tidak bisa dimuat.') } })
+      .finally(() => { if (live) setLoadingContacts(false) })
+    return () => { live = false }
+  }, [audience, draft])
+
+  const selectedCount = contacts.length - excluded.size
+  // Everyone ticked = the whole audience (null); otherwise exactly the people picked.
+  // A draft continued before the list has loaded keeps its saved pick.
+  const contactIds = loadingContacts && draft?.audience === audience
+    ? draft.contactIds
+    : excluded.size === 0 ? null : contacts.filter((c) => !excluded.has(c.id)).map((c) => c.id)
 
   async function toReview(): Promise<void> {
     setBusy(true)
     setErrors([])
     try {
-      const r = await window.api.bcCreateCampaign({ name: name.trim(), template, audience })
+      const r = await window.api.bcCreateCampaign({ name: name.trim(), template, audience, contactIds })
       if (!r.ok) { setErrors(r.errors); setWarnings(r.warnings); return }
       // Going back and continuing again must not leave the previous draft behind (a failed check above keeps it).
       const previous = campaign ?? draft
@@ -94,7 +124,12 @@ export function CampaignWizard({ onDone, onClose, draft }: { onDone(): void; onC
               Audiens chat dihitung dari pesan yang tercatat aplikasi. Hanya penerima yang aktif dan tidak di daftar tolak yang akan dikirimi.
             </div>
           </fieldset>
-          <button type="button" className="btn btn-primary" onClick={() => setStep(2)}>Lanjut</button>
+          <fieldset className="mb-3">
+            <legend className="h6">Pilih penerima</legend>
+            <RecipientPicker contacts={contacts} excluded={excluded} onChange={setExcluded} loading={loadingContacts} error={contactsError} />
+          </fieldset>
+          <button type="button" className="btn btn-primary" disabled={loadingContacts || (contacts.length > 0 && selectedCount === 0)}
+            onClick={() => setStep(2)}>Lanjut</button>
         </>
       )}
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { CHANNELS, SettingsPatchSchema, ApiKeySchema, AuthSetupSchema, ChatIdSchema } from '../src/shared/ipc'
+import { CHANNELS, SettingsPatchSchema, ApiKeySchema, AuthSetupSchema, ChatIdSchema, MemoryPatchSchema, BulkHandlingSchema } from '../src/shared/ipc'
 
 describe('SettingsPatchSchema', () => {
   it('accepts a valid partial patch', () => {
@@ -92,3 +92,33 @@ describe('SettingsPatchSchema notifyIncoming', () => {
   })
 })
 
+describe('MemoryPatchSchema', () => {
+  it('accepts a summary and/or short facts', () => {
+    expect(MemoryPatchSchema.safeParse({ summary: 'ok', facts: { budget: '5 juta' } }).success).toBe(true)
+    expect(MemoryPatchSchema.safeParse({ facts: {} }).success).toBe(true)
+    expect(MemoryPatchSchema.safeParse({}).success).toBe(true)
+  })
+  it('rejects unknown keys, a 701-character summary and more than 12 facts', () => {
+    expect(MemoryPatchSchema.safeParse({ summaryy: 'x' }).success).toBe(false)
+    expect(MemoryPatchSchema.safeParse({ summary: 'a'.repeat(701) }).success).toBe(false)
+    const many = Object.fromEntries(Array.from({ length: 13 }, (_, i) => [`k${i}`, 'v']))
+    expect(MemoryPatchSchema.safeParse({ facts: many }).success).toBe(false)
+    expect(MemoryPatchSchema.safeParse({ facts: { a: 'v'.repeat(81) } }).success).toBe(false)
+  })
+  it('has memory channels, none of which return the API key', () => {
+    for (const c of ['memGet', 'memUpdate', 'memForget']) expect(CHANNELS).toHaveProperty(c)
+  })
+})
+
+describe('BulkHandlingSchema', () => {
+  it('accepts a list of chats and a target', () => {
+    expect(BulkHandlingSchema.safeParse({ chatIds: ['6281@s.whatsapp.net'], to: 'manusia' }).success).toBe(true)
+    expect(BulkHandlingSchema.safeParse({ chatIds: ['a'], to: 'bot' }).success).toBe(true)
+  })
+  it('rejects an empty list, more than 500, a wrong target and extra keys', () => {
+    expect(BulkHandlingSchema.safeParse({ chatIds: [], to: 'bot' }).success).toBe(false)
+    expect(BulkHandlingSchema.safeParse({ chatIds: Array.from({ length: 501 }, (_, i) => `c${i}`), to: 'bot' }).success).toBe(false)
+    expect(BulkHandlingSchema.safeParse({ chatIds: ['a'], to: 'menunggu_admin' }).success).toBe(false)
+    expect(BulkHandlingSchema.safeParse({ chatIds: ['a'], to: 'bot', x: 1 }).success).toBe(false)
+  })
+})

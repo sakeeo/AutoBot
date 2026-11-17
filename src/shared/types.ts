@@ -13,6 +13,8 @@ export interface Settings {
   theme: 'light' | 'dark' | 'auto'
   /** Desktop notification for every new incoming chat message. */
   notifyIncoming: boolean
+  /** The bot remembers returning customers (summary + facts). */
+  memoryEnabled: boolean
 }
 
 export interface IncomingMessage {

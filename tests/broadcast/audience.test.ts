@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { openDb, type Db } from '../../src/main/db'
 import { BroadcastStore } from '../../src/main/broadcast/store'
-import { syncChatContacts } from '../../src/main/broadcast/audience'
+import { resolveLidContacts, syncChatContacts } from '../../src/main/broadcast/audience'
 
 const NOW = 1_700_000_000_000
 const DAY = 86_400_000
@@ -60,5 +60,26 @@ describe('syncChatContacts', () => {
     syncChatContacts(db, store, NOW)
     expect(store.findContact({ number: '628777777777' })!.status).toBe('tidak_aktif')
   })
+  it('takes the number of a lid chat from the phone jid WhatsApp reported, and fills it in later too', () => {
+    const { db, store } = setup()
+    inMsg(db, 'old1@lid', NOW - 2 * DAY)
+    syncChatContacts(db, store, NOW)
+    expect(store.findContact({ jid: 'old1@lid' })!.number).toBeNull()
+    db.prepare('INSERT INTO messages(wa_id, chat_id, direction, text, is_group, created_at, alt_jid) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run('w-alt', 'old1@lid', 'in', 'halo', 0, NOW - DAY, '628123456789@s.whatsapp.net')
+    expect(syncChatContacts(db, store, NOW)).toBe(0)
+    expect(store.findContact({ jid: 'old1@lid' })).toMatchObject({ number: '628123456789', source: 'chat', status: 'aktif' })
+  })
 })
 
+describe('resolveLidContacts', () => {
+  it("fills a lid-only contact's number from WhatsApp's lid mapping", async () => {
+    const { db, store } = setup()
+    store.upsertContact({ number: null, jid: 'x1@lid', source: 'chat', status: 'aktif' })
+    store.upsertContact({ number: null, jid: 'x2@lid', source: 'chat', status: 'aktif' })
+    const map: Record<string, string> = { 'x1@lid': '628987654321:3@s.whatsapp.net' }
+    expect(await resolveLidContacts(db, store, async (lid) => map[lid] ?? null)).toBe(1)
+    expect(store.findContact({ jid: 'x1@lid' })!.number).toBe('628987654321')
+    expect(store.findContact({ jid: 'x2@lid' })!.number).toBeNull()
+  })
+})

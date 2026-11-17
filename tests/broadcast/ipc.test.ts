@@ -104,6 +104,29 @@ describe('safety settings', () => {
 })
 
 describe('campaigns', () => {
+  it('sends only to the recipients picked by hand, and leaving someone out keeps the contact', () => {
+    const t = setup()
+    const ps = t.people(4)
+    expect(t.h.bcAudienceContacts('chat').map((c) => c.id)).toEqual(ps.map((p) => p.id))
+    const r = t.h.bcCreateCampaign({ name: 'x', template: good, audience: 'chat', contactIds: [ps[0].id, ps[2].id] }) as
+      { ok: true; campaign: { id: number; contactIds: number[] | null }; samples: string[] }
+    expect(r.campaign.contactIds).toEqual([ps[0].id, ps[2].id])
+    expect(r.samples).toHaveLength(2)
+    expect(t.h.bcPreviewCampaign(r.campaign.id).eligible).toBe(2)
+    t.ready()
+    t.h.bcStartCampaign(r.campaign.id)
+    const sent = t.db.prepare('SELECT contact_id FROM broadcast_sends WHERE campaign_id = ? ORDER BY contact_id').all(r.campaign.id) as { contact_id: number }[]
+    expect(sent.map((x) => x.contact_id)).toEqual([ps[0].id, ps[2].id])
+    expect(t.h.bcContacts()).toHaveLength(4)
+  })
+  it('without a pick, a campaign goes to the whole audience; an empty pick is refused', () => {
+    const t = setup()
+    t.people(3)
+    const r = t.h.bcCreateCampaign({ name: 'x', template: good, audience: 'chat', contactIds: null }) as { ok: true; campaign: { id: number; contactIds: null } }
+    expect(r.campaign.contactIds).toBeNull()
+    expect(t.h.bcPreviewCampaign(r.campaign.id).eligible).toBe(3)
+    expect(() => t.h.bcCreateCampaign({ name: 'x', template: good, audience: 'chat', contactIds: [] })).toThrow()
+  })
   it('returns lint errors instead of creating a campaign that breaks the rules', () => {
     const t = setup()
     const r = t.h.bcCreateCampaign({ name: 'x', template: 'Halo, ada promo besar.', audience: 'semua' })
@@ -277,5 +300,82 @@ describe('hardening of the settings and resume rules', () => {
     const c = t.h.bcCreateCampaign({ name: 'x', template: good, audience: 'semua' }) as { campaign: { id: number } }
     t.h.bcStartCampaign(c.campaign.id)
     expect(t.h.bcExportReport(c.campaign.id)).toContain("'  =cmd")
+  })
+})
+
+describe('warm-up', () => {
+  const waiting = (t: ReturnType<typeof setup>, n = 2) =>
+    Array.from({ length: n }, (_, i) =>
+      t.store.upsertContact({ number: `6281300000${i}00`, jid: null, source: 'impor', status: 'menunggu_persetujuan' }))
+  const konfirmasi = (t: ReturnType<typeof setup>) => t.h.bcCampaigns().filter((c) => c.kind === 'konfirmasi')
+
+  it('is off by default and does nothing', () => {
+    const t = setup()
+    t.ready()
+    waiting(t)
+    expect(t.h.bcOverview().warmup).toBe(false)
+    expect(t.h.warmupTick()).toBe(false)
+    expect(konfirmasi(t)).toHaveLength(0)
+  })
+  it('cannot be switched on before the safety settings are declared, but can always be switched off', () => {
+    const t = setup()
+    expect(t.h.bcSetWarmup(true)).toMatchObject({ ok: false })
+    expect(t.h.bcOverview().warmup).toBe(false)
+    expect(t.h.bcSetWarmup(false)).toEqual({ ok: true, enabled: false })
+  })
+  it('switching it on starts a consent campaign for the waiting contacts, once', () => {
+    const t = setup()
+    t.ready()
+    waiting(t, 2)
+    expect(t.h.bcSetWarmup(true)).toEqual({ ok: true, enabled: true })
+    expect(t.h.bcOverview().warmup).toBe(true)
+    const [c] = konfirmasi(t)
+    expect(c).toMatchObject({ status: 'berjalan', audience: 'impor' })
+    expect(c.template).toMatch(/Balas YA/)
+    expect(t.h.warmupTick()).toBe(false)
+    expect(konfirmasi(t)).toHaveLength(1)
+  })
+  it('does nothing when nobody is waiting', () => {
+    const t = setup()
+    t.ready()
+    t.h.bcSetWarmup(true)
+    expect(t.h.warmupTick()).toBe(false)
+    expect(konfirmasi(t)).toHaveLength(0)
+  })
+  it('never restarts a campaign that a safety stop paused; only a person resumes it', () => {
+    const t = setup()
+    t.ready()
+    waiting(t)
+    t.h.bcSetWarmup(true)
+    const [c] = konfirmasi(t)
+    t.h.bcPauseCampaign(c.id)
+    expect(t.h.warmupTick()).toBe(false)
+    expect(konfirmasi(t)).toHaveLength(1)
+  })
+  it('leaves no empty campaign behind when nobody can be messaged right now', () => {
+    const t = setup()
+    t.ready()
+    const [p] = waiting(t, 1)
+    t.store.suppress({ number: p.number, reason: 'berhenti' })
+    t.h.bcSetWarmup(true)
+    expect(t.h.warmupTick()).toBe(false)
+    expect(t.h.bcCampaigns()).toHaveLength(0)
+  })
+  it('waits for the safety switch: turning safety off stops new warm-up campaigns', () => {
+    const t = setup()
+    t.ready()
+    t.h.bcSetWarmup(true)
+    t.h.bcSetSafety({ enabled: false })
+    waiting(t)
+    expect(t.h.warmupTick()).toBe(false)
+  })
+  it('only the switch is refused while locked; the app itself can still run the tick', () => {
+    const t = setup()
+    t.ready()
+    t.h.bcSetWarmup(true)
+    waiting(t)
+    t.flags.locked = true
+    expect(() => t.h.bcSetWarmup(false)).toThrow('LOCKED')
+    expect(t.h.warmupTick()).toBe(true)
   })
 })

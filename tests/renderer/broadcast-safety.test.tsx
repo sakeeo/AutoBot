@@ -9,7 +9,7 @@ const safety = (o: Partial<SafetyView> = {}): SafetyView => ({
   window: { start: '09:00', end: '20:00', timezone: 'Asia/Makassar' }, minGapDays: 7, ...o
 })
 const overview = (s: SafetyView, health: OverviewView['health'] = { level: 'aman', reason: 'Tidak ada tanda bahaya.' }): OverviewView => ({
-  contacts: { aktif: 0, menunggu_persetujuan: 0, tidak_aktif: 0 }, suppressed: 0, pendingConfirm: 0, safety: s, health, runningCampaignId: null
+  contacts: { aktif: 0, menunggu_persetujuan: 0, tidak_aktif: 0 }, suppressed: 0, pendingConfirm: 0, warmup: false, safety: s, health, runningCampaignId: null
 })
 
 function setApi(s: SafetyView = safety(), health?: OverviewView['health']) {

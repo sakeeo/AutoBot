@@ -177,6 +177,12 @@ export class BaileysGateway implements WaGateway {
     return jidForNumber(number)
   }
 
+  async phoneJidForLid(lid: string): Promise<string | null> {
+    const mapping = this.sock?.signalRepository?.lidMapping
+    if (!mapping?.getPNForLID) return null
+    return (await mapping.getPNForLID(lid)) ?? null
+  }
+
   async onWhatsApp(numbers: string[]): Promise<{ number: string; jid: string | null; exists: boolean }[]> {
     if (!this.sock) throw new Error('WhatsApp not connected')
     const results = ((await this.sock.onWhatsApp(...numbers)) ?? []) as { jid: string; exists: boolean }[]

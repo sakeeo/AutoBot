@@ -183,7 +183,7 @@ export class BroadcastStore {
       this.db.prepare('UPDATE broadcast_sends SET contact_id = 0 WHERE contact_id = ?').run(id)
       this.db.prepare('DELETE FROM broadcast_contacts WHERE id = ?').run(id)
       for (const j of new Set([jid, c.jid].filter((x): x is string => !!x)))
-        for (const t of ['messages', 'message_log', 'turns', 'handoffs', 'contacts', 'events', 'cooldowns'])
+        for (const t of ['messages', 'message_log', 'turns', 'handoffs', 'contacts', 'events', 'cooldowns', 'contact_memory'])
           this.db.prepare(`DELETE FROM ${t} WHERE chat_id = ?`).run(j)
       if (was) {
         const ids = this.matchingRows(c.number, c.jid, c.number ? hashNumber(c.number, salt) : null, c.jid ? hashNumber(c.jid, salt) : null)
@@ -199,16 +199,20 @@ export class BroadcastStore {
 
   private toCampaign = (r: {
     id: number; name: string; kind: CampaignKind; template: string; status: CampaignStatus; pause_reason: string | null
-    created_at: number; started_at: number | null; audience: Audience; not_before: number | null
+    created_at: number; started_at: number | null; audience: Audience; not_before: number | null; contact_ids: string | null
   }): Campaign => ({
     id: r.id, name: r.name, kind: r.kind, template: r.template, status: r.status, pauseReason: r.pause_reason,
-    createdAt: r.created_at, startedAt: r.started_at, audience: r.audience, notBefore: r.not_before
+    createdAt: r.created_at, startedAt: r.started_at, audience: r.audience, notBefore: r.not_before,
+    contactIds: r.contact_ids ? (JSON.parse(r.contact_ids) as number[]) : null
   })
 
-  createCampaign(c: { name: string; kind: CampaignKind; template: string; audience: Audience; notBefore?: number | null }): Campaign {
+  createCampaign(c: {
+    name: string; kind: CampaignKind; template: string; audience: Audience; notBefore?: number | null; contactIds?: number[] | null
+  }): Campaign {
+    const ids = c.contactIds ? [...new Set(c.contactIds)] : null
     const r = this.db
-      .prepare('INSERT INTO broadcast_campaigns(name, kind, template, status, audience, not_before, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(c.name, c.kind, c.template, 'draf', c.audience, c.notBefore ?? null, this.clock.now())
+      .prepare('INSERT INTO broadcast_campaigns(name, kind, template, status, audience, not_before, created_at, contact_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(c.name, c.kind, c.template, 'draf', c.audience, c.notBefore ?? null, this.clock.now(), ids ? JSON.stringify(ids) : null)
     return this.getCampaign(Number(r.lastInsertRowid))!
   }
 
@@ -261,6 +265,14 @@ export class BroadcastStore {
     return rows.map(toContact)
   }
 
+  /** The campaign's audience, narrowed to the recipients picked by hand when there are any. Unpicked contacts stay in the list. */
+  campaignAudience(c: Pick<Campaign, 'kind' | 'audience' | 'contactIds'>): BContact[] {
+    const all = this.audienceContacts(c.kind, c.audience)
+    if (!c.contactIds) return all
+    const picked = new Set(c.contactIds)
+    return all.filter((ct) => picked.has(ct.id))
+  }
+
   sendCount(campaignId: number): number {
     return (this.db.prepare('SELECT COUNT(*) AS n FROM broadcast_sends WHERE campaign_id = ?').get(campaignId) as { n: number }).n
   }
@@ -274,7 +286,7 @@ export class BroadcastStore {
     const has = this.db.prepare('SELECT 1 FROM broadcast_sends WHERE campaign_id = ? AND contact_id = ?')
     let n = 0
     this.db.transaction(() => {
-      for (const ct of this.audienceContacts(c.kind, c.audience)) {
+      for (const ct of this.campaignAudience(c)) {
         if (has.get(campaignId, ct.id)) continue
         ins.run(campaignId, ct.id, now)
         n++

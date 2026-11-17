@@ -5,6 +5,7 @@
  */
 :root {
   /* §11 — exact guide values */
+  --titlebar-h: 36px;
   --color-primary: #1F4D38;
   --color-primary-dark: #163A29;
   --color-primary-light: #E1E5CF;

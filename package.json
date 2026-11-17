@@ -1,8 +1,9 @@
 {
-  "name": "wa-otomation",
+  "name": "autobot",
+  "productName": "AutoBot",
   "version": "0.1.0",
   "private": true,
-  "description": "WhatsApp auto-reply from local knowledge folder",
+  "description": "AutoBot — Balas WA Otomatis pakai AI",
   "main": "./out/main/index.js",
   "author": "Kerabat Koding",
   "scripts": {
@@ -11,6 +12,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "dist": "npm run build && electron-builder",
+    "dist:win": "npm run build && electron-builder --win nsis",
     "rebuild:electron": "electron-builder install-app-deps",
     "rebuild:node": "npm rebuild better-sqlite3"
   },

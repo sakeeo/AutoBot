@@ -15,6 +15,7 @@ describe('SettingsStore', () => {
     expect(s.allowGroups).toBe(false)
     expect(s.theme).toBe('auto')
     expect(s.notifyIncoming).toBe(true)
+    expect(s.memoryEnabled).toBe(true)
   })
 
   it('keeps notifications on for a settings file saved before the option existed', () => {

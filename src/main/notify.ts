@@ -13,7 +13,7 @@ export function incomingNotification(
   ctx: { enabled: boolean; locked: boolean; now: number }
 ): { title: string; body: string } | null {
   if (!ctx.enabled || m.direction !== 'in' || ctx.now - m.at > FRESH_MS) return null
-  if (ctx.locked) return { title: 'WA Otomation', body: 'Ada pesan baru' }
+  if (ctx.locked) return { title: 'AutoBot', body: 'Ada pesan baru' }
   const who = m.isGroup ? 'Pesan di grup' : `Pesan dari ${m.chatId.split('@')[0]}`
   return { title: who, body: (m.text || '(pesan non-teks)').slice(0, BODY_MAX) }
 }

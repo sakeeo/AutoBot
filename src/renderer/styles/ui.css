@@ -162,3 +162,13 @@
   .dash .card, .rate-ring .ring-value { transition: none; }
   .dash .card:hover { transform: none; }
 }
+
+/* ===================== Login screen: one calm card ===================== */
+.login-screen {
+  min-height: calc(100vh - var(--titlebar-h)); display: flex; align-items: center; justify-content: center;
+  padding: var(--space-6); background: var(--color-background);
+}
+.login-brand { display: flex; flex-direction: column; align-items: center; gap: var(--space-1); margin-bottom: var(--space-5); text-align: center; }
+.login-logo { border-radius: var(--radius-card); margin-bottom: var(--space-2); }
+.login-title { margin: 0; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.01em; color: var(--color-text-primary); }
+.login-tagline { margin: 0; font-size: 0.875rem; color: var(--color-text-muted); }

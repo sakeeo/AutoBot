@@ -1,8 +1,10 @@
 export const id = {
-  appName: 'WA Otomation',
+  appName: 'AutoBot',
+  tagline: 'Balas WA Otomatis pakai AI',
   nav: {
     dashboard: 'Dashboard',
     messages: 'Pesan',
+    contacts: 'Kontak',
     broadcast: 'Broadcast',
     test: 'Uji Jawaban',
     log: 'Log',

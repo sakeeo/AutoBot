@@ -8,7 +8,7 @@ export function ReplyBehaviorTab() {
   const ooc = settings.outOfContext
 
   return (
-    <div style={{ maxWidth: 640 }}>
+    <div style={{ maxWidth: 840 }}>
       <p className="text-body-secondary">Perilaku dasar balasan. Perubahan di tab ini langsung berlaku, tanpa menekan Terapkan.</p>
 
       <div className="mb-4">

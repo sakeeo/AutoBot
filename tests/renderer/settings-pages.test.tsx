@@ -13,7 +13,7 @@ const settings: Settings = {
   knowledgeFolders: ['/home/u/docs'], excludePatterns: [], mode: 'extractive',
   outOfContext: { action: 'reply', replyText: 'Maaf' }, threshold: 0.6, allowGroups: false, cooldownSec: 10,
   ai: { provider: 'claude', model: 'claude-haiku-5-5', maxTokens: 400 }, autoStart: false, theme: 'auto',
-  notifyIncoming: true
+  notifyIncoming: true, memoryEnabled: true
 }
 
 function setApi(over: Record<string, unknown> = {}) {
@@ -139,6 +139,14 @@ describe('AiSettings', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ya, Hapus key' }))
     await waitFor(() => expect(api.deleteApiKey).toHaveBeenCalledTimes(1))
   })
+  it('has a switch to remember returning customers, on by default', async () => {
+    const api = setApi()
+    render(<AiSettings />)
+    const sw = (await screen.findByLabelText('Ingat pelanggan lama')) as HTMLInputElement
+    expect(sw.checked).toBe(true)
+    fireEvent.click(sw)
+    await waitFor(() => expect(api.updateSettings).toHaveBeenCalledWith({ memoryEnabled: false }))
+  })
   it('shows the saved-key status as text', async () => {
     render(<AiSettings />)
     expect((await screen.findByText('Key tersimpan')).className).toMatch(/badge/)
@@ -176,7 +184,19 @@ describe('LockScreen', () => {
   it('is a card region named after the login and keeps the app name', () => {
     render(<LockScreen onUnlocked={() => undefined} />)
     const region = screen.getByRole('region', { name: 'Login aplikasi' })
-    expect(within(region).getByText('WA Otomation')).toBeTruthy()
+    expect(within(region).getByText('AutoBot')).toBeTruthy()
     expect(within(region).getByRole('button', { name: 'Masuk' })).toBeTruthy()
+  })
+  it('is one calm card: logo, name, tagline and the form, with nothing decorative around it', () => {
+    const { container } = render(<LockScreen onUnlocked={() => undefined} />)
+    const region = screen.getByRole('region', { name: 'Login aplikasi' })
+    expect(within(region).getByRole('heading', { level: 1, name: 'AutoBot' })).toBeTruthy()
+    expect(within(region).getByText('Balas WA Otomatis pakai AI')).toBeTruthy()
+    expect(within(region).getByLabelText('Username')).toBeTruthy()
+    expect(container.querySelectorAll('img')).toHaveLength(1)
+    expect(container.querySelector('svg')).toBeNull()
+    expect(container.querySelector('ul')).toBeNull()
+    expect(container.querySelector('.ai-backdrop')).toBeNull()
+    expect(container.querySelector('.login-hero')).toBeNull()
   })
 })

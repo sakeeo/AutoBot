@@ -8,9 +8,17 @@ import '@fontsource/inter/700.css'
 import './styles/tokens.css'
 import './styles/shell.css'
 import './styles/ui.css'
+import './styles/forms.css'
+import './styles/chat.css'
 import { App } from './App'
+import { TitleBar } from './shell/TitleBar'
 import { applyCachedTheme } from './theme'
 
 applyCachedTheme()
 
-createRoot(document.getElementById('root')!).render(<App />)
+createRoot(document.getElementById('root')!).render(
+  <>
+    <TitleBar />
+    <App />
+  </>
+)

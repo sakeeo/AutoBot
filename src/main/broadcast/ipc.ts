@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { AddContactSchema, AttestSchema, CampaignInputSchema, ConfirmTextSchema, ContactFilterSchema, IdSchema, ImportFileSchema, SafetyPatchSchema } from '../../shared/broadcast'
+import { z } from 'zod'
+import { AddContactSchema, AttestSchema, AudienceSchema, CampaignInputSchema, ConfirmTextSchema, ContactFilterSchema, IdSchema, ImportFileSchema, SafetyPatchSchema } from '../../shared/broadcast'
 import type {
   Campaign, CampaignView, ContactStatus, Health, ImportPreviewView, OverviewView, ReportView, SafetyView
 } from '../../shared/broadcast'
@@ -80,6 +81,10 @@ export function createBroadcastHandlers(d: BroadcastIpcDeps) {
     return s.configured && s.enabled ? null : 'Lengkapi dan aktifkan pengaturan keamanan dulu (tab Keamanan).'
   }
 
+  const warmupOn = (): boolean => {
+    try { return (JSON.parse(store.getState('warmup') ?? '{}') as { enabled?: boolean }).enabled === true } catch { return false }
+  }
+
   const health = (): Health => {
     const paused = store.listCampaigns().find((c) => c.status === 'dijeda')
     if (paused) return { level: 'dijeda', reason: paused.pauseReason ?? 'Kampanye dijeda.' }
@@ -87,6 +92,25 @@ export function createBroadcastHandlers(d: BroadcastIpcDeps) {
     if (!v.configured) return { level: 'hati-hati', reason: 'Usia nomor belum dinyatakan; broadcast belum bisa dipakai.' }
     if (!v.enabled) return { level: 'hati-hati', reason: 'Broadcast sedang dimatikan.' }
     return { level: 'aman', reason: 'Tidak ada tanda bahaya.' }
+  }
+
+  /**
+   * Warm-up: with the switch on, contacts still waiting for consent get the usual consent message automatically,
+   * at the pace the safety rules allow (daily cap by number age, send window, random gaps, pauses between batches,
+   * stop on warning signs). Returns true when a campaign was started. Called by the app itself every few minutes.
+   */
+  function warmupTick(): boolean {
+    if (!warmupOn() || ready()) return false
+    const open = store.listCampaigns().some((c) => c.kind === 'konfirmasi' && ['draf', 'terjadwal', 'berjalan', 'dijeda'].includes(c.status))
+    // A paused one (a safety stop) is only ever resumed by a person.
+    if (open || store.audienceContacts('konfirmasi', 'impor').length === 0) return false
+    const c = store.createCampaign({ name: 'Warming-up otomatis', kind: 'konfirmasi', template: CONFIRMATION_TEXT, audience: 'impor' })
+    if (engine.preview(c.id).eligible === 0) {
+      store.deleteDraft(c.id)
+      return false
+    }
+    engine.start(c.id)
+    return true
   }
 
   const campaignView = (c: Campaign): CampaignView => ({ ...c, progress: store.progress(c.id) })
@@ -98,6 +122,7 @@ export function createBroadcastHandlers(d: BroadcastIpcDeps) {
         contacts: store.countByStatus(),
         suppressed: store.listSuppressed().length,
         pendingConfirm: store.audienceContacts('konfirmasi', 'impor').length,
+        warmup: warmupOn(),
         safety: safetyView(),
         health: health(),
         runningCampaignId: store.runningCampaign()?.id ?? null
@@ -106,6 +131,10 @@ export function createBroadcastHandlers(d: BroadcastIpcDeps) {
     bcContacts(filter?: unknown) {
       const f = ContactFilterSchema.parse(filter ?? {})
       return store.listContacts({ status: f.status as ContactStatus | undefined, limit: 500 })
+    },
+    /** Everyone a broadcast to this audience could reach, for picking recipients one by one. */
+    bcAudienceContacts(audience: unknown) {
+      return store.audienceContacts('broadcast', AudienceSchema.parse(audience))
     },
     bcSuppressed() {
       return store.listSuppressed()
@@ -188,9 +217,11 @@ export function createBroadcastHandlers(d: BroadcastIpcDeps) {
       const i = CampaignInputSchema.parse(input)
       const lint = lintMessage(i.template, { businessName: d.businessName() })
       if (lint.errors.length > 0) return { ok: false as const, errors: lint.errors, warnings: lint.warnings }
-      const campaign = store.createCampaign({ name: i.name, kind: 'broadcast', template: i.template, audience: i.audience })
+      const campaign = store.createCampaign({
+        name: i.name, kind: 'broadcast', template: i.template, audience: i.audience, contactIds: i.contactIds ?? null
+      })
       // Three rendered examples (real business name, real footer) so the user sees exactly what people will get.
-      const samples = store.audienceContacts('broadcast', i.audience).slice(0, 3).map((c) =>
+      const samples = store.campaignAudience(campaign).slice(0, 3).map((c) =>
         withFooter(renderTemplate(i.template, { ...c.vars, nama: c.name, bisnis: d.businessName() })))
       return { ok: true as const, campaign, warnings: lint.warnings, samples }
     },
@@ -263,6 +294,18 @@ export function createBroadcastHandlers(d: BroadcastIpcDeps) {
       if (p.window) s.window = p.window
       store.setState('safety', JSON.stringify(s))
       return { ok: true as const, safety: safetyView() }
+    },
+    warmupTick,
+    bcSetWarmup(enabled: unknown) {
+      isLocked(d)
+      const on = z.boolean().parse(enabled)
+      if (on) {
+        const notReady = ready()
+        if (notReady) return { ok: false as const, error: notReady }
+      }
+      store.setState('warmup', JSON.stringify({ enabled: on }))
+      if (on) warmupTick()
+      return { ok: true as const, enabled: on }
     },
     bcEraseContact(id: unknown) {
       isLocked(d)

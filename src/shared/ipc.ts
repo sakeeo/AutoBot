@@ -32,7 +32,8 @@ export const SettingsPatchSchema = z
       .strict(),
     autoStart: z.boolean(),
     theme: z.enum(['light', 'dark', 'auto']),
-    notifyIncoming: z.boolean()
+    notifyIncoming: z.boolean(),
+    memoryEnabled: z.boolean()
   })
   .partial()
   .strict()
@@ -45,6 +46,16 @@ export type AuthResult = { ok: true } | { ok: false; error: 'bad' | 'throttled' 
 
 export const ApiKeySchema = z.string().trim().min(10).max(500)
 export const ChatIdSchema = z.string().min(1).max(200)
+export const MemoryPatchSchema = z
+  .object({
+    summary: z.string().max(700),
+    facts: z.record(z.string().trim().min(1).max(40), z.string().trim().min(1).max(80)).refine((f) => Object.keys(f).length <= 12, 'Maksimal 12 fakta')
+  })
+  .partial()
+  .strict()
+export const BulkHandlingSchema = z
+  .object({ chatIds: z.array(z.string().min(1).max(200)).min(1).max(500), to: z.enum(['manusia', 'bot']) })
+  .strict()
 export const QuestionSchema = z.string().trim().min(1).max(2000)
 export const LimitSchema = z.number().int().min(1).max(500)
 
@@ -69,7 +80,9 @@ export interface FeedMessage {
   at: number
   isGroup: boolean
 }
-export interface ChatSummary { chatId: string; isGroup: boolean; last: FeedMessage; count: number }
+/** Who answers a chat: the bot, the bot's handoff waiting for an admin, or a person who took over. */
+export type Handling = 'bot' | 'menunggu_admin' | 'manusia'
+export interface ChatSummary { chatId: string; isGroup: boolean; last: FeedMessage; count: number; handling: Handling }
 
 export interface FileInfo {
   file: string
@@ -102,6 +115,8 @@ export interface AgentTurnView {
   matchedRule: string | null
   removed: { numbers: boolean; urls: string[]; numbersUnknown: string[]; cta?: boolean }
   fallback: boolean
+  attempts?: number
+  fallbackReason?: 'timeout' | 'auth' | 'rate_limit' | 'network' | 'unusable'
   hits: { file: string; text: string; coverage: number }[]
 }
 export interface TestResult {
@@ -129,6 +144,11 @@ export interface Api {
   connect(): Promise<void>
   logout(): Promise<void>
   onStatus(cb: (s: ConnStatus) => void): () => void
+  winMinimize(): Promise<void>
+  winToggleMaximize(): Promise<void>
+  winClose(): Promise<void>
+  winIsMaximized(): Promise<boolean>
+  onWinMaximized(cb: (maximized: boolean) => void): () => void
   getSettings(): Promise<Settings>
   updateSettings(patch: unknown): Promise<Settings>
   pickFolder(): Promise<string | null>
@@ -142,8 +162,9 @@ export interface Api {
   kbDelete(file: string): Promise<{ ok: boolean }>
   onIndexStatus(cb: (e: IndexStatusEvent) => void): () => void
   testQuestion(q: string): Promise<TestResult>
-  saveApiKey(key: string): Promise<{ ok: boolean; error?: string }>
+  saveApiKey(key: string): Promise<{ ok: boolean; error?: string; models?: string[] }>
   hasApiKey(): Promise<boolean>
+  listModels(): Promise<{ ok: true; models: string[] } | { ok: false; error: string }>
   deleteApiKey(): Promise<void>
   openConsole(): Promise<void>
   getLog(limit: number): Promise<LogRow[]>
@@ -161,12 +182,14 @@ export interface Api {
   getDashboard(): Promise<DashboardData>
   bcOverview(): Promise<OverviewView>
   bcContacts(filter?: { status?: ContactStatus }): Promise<BContact[]>
+  bcAudienceContacts(audience: 'chat' | 'impor' | 'semua'): Promise<BContact[]>
   bcSuppressed(): Promise<{ number: string | null; jid: string | null; reason: SuppressReason; at: number }[]>
   bcImportPreview(file: { name: string; data: string | Uint8Array }): Promise<ImportPreviewView>
   bcImportCommit(previewId: string, attest: { accepted: boolean; sourceNote: string }): Promise<{ importId: number; added: number; notOnWhatsApp: number; blockedBySuppression: number; aborted: boolean }>
   bcSendConfirmations(): Promise<{ ok: true; campaignId: number } | { ok: false; error: string }>
+  bcSetWarmup(enabled: boolean): Promise<{ ok: true; enabled: boolean } | { ok: false; error: string }>
   bcCampaigns(): Promise<CampaignView[]>
-  bcCreateCampaign(input: { name: string; template: string; audience: 'chat' | 'impor' | 'semua' }): Promise<{ ok: true; campaign: Campaign; warnings: string[]; samples: string[] } | { ok: false; errors: string[]; warnings: string[] }>
+  bcCreateCampaign(input: { name: string; template: string; audience: 'chat' | 'impor' | 'semua'; contactIds?: number[] | null }): Promise<{ ok: true; campaign: Campaign; warnings: string[]; samples: string[] } | { ok: false; errors: string[]; warnings: string[] }>
   bcPreviewCampaign(id: number): Promise<{ eligible: number; skipped: Record<string, number>; estimatedDays: number }>
   bcStartCampaign(id: number, confirmText?: string): Promise<{ ok: true } | { ok: false; error: string }>
   bcPauseCampaign(id: number): Promise<void>
@@ -182,7 +205,16 @@ export interface Api {
   bcAddContact(input: { name: string; number: string; accepted: boolean; sourceNote: string }): Promise<
     { ok: true; added: number; notOnWhatsApp: number; blockedBySuppression: number } | { ok: false; error: string }>
   onBroadcast(cb: (e: BroadcastEvent) => void): () => void
+  memGet(chatId: string): Promise<{ summary: string; facts: Record<string, string> }>
+  memUpdate(chatId: string, patch: { summary?: string; facts?: Record<string, string> }): Promise<void>
+  memForget(chatId: string): Promise<void>
   listChats(): Promise<ChatSummary[]>
+  getHandling(chatId: string): Promise<Handling>
+  takeOverChat(chatId: string): Promise<void>
+  handBackChat(chatId: string): Promise<void>
+  /** Takes over or hands back many chats at once; returns how many were changed (groups are skipped). */
+  setHandlingBulk(chatIds: string[], to: 'manusia' | 'bot'): Promise<{ changed: number }>
+  sendAsAdmin(chatId: string, text: string): Promise<{ ok: true } | { ok: false; error: string }>
   getThread(chatId: string): Promise<FeedMessage[]>
   onMessage(cb: (m: FeedMessage) => void): () => void
   onAuthLocked(cb: () => void): () => void

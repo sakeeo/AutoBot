@@ -1,0 +1,104 @@
+/* ===================== Uji Jawaban: a chat window ===================== */
+.tchat {
+  display: flex; flex-direction: column; height: calc(100vh - 300px); min-height: 380px; overflow: hidden;
+  background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-card);
+}
+.tchat-thread {
+  flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-2);
+  padding: var(--space-4); background: var(--color-background);
+}
+.tchat-row { display: flex; }
+.tchat-row-user { justify-content: flex-end; }
+.tchat-row-bot { justify-content: flex-start; }
+.tchat-col { display: flex; flex-direction: column; gap: 4px; max-width: min(78%, 560px); align-items: flex-start; }
+.tchat-bubble {
+  position: relative; max-width: min(78%, 560px); padding: 7px 12px 5px; font-size: 0.875rem; line-height: 1.4;
+  border-radius: 14px; border: 1px solid var(--color-border); overflow-wrap: anywhere;
+}
+.tchat-col .tchat-bubble { max-width: 100%; }
+.tchat-bubble-user { background: var(--color-primary); color: var(--color-on-primary); border-bottom-right-radius: 4px; }
+.tchat-bubble-bot { background: var(--color-surface); color: var(--color-text-primary); border-bottom-left-radius: 4px; }
+.tchat-bubble-bot.is-muted .tchat-text { color: var(--color-text-muted); font-style: italic; }
+.tchat-text { white-space: pre-wrap; }
+.tchat-time { display: block; margin-top: 2px; text-align: right; font-size: 0.6875rem; opacity: 0.65; }
+.tchat-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); padding-left: 4px; }
+.tchat-chip {
+  padding: 1px 8px; border-radius: 999px; background: var(--color-neutral-soft); color: var(--color-neutral-text);
+  font-size: 0.6875rem; font-weight: 600;
+}
+.tchat-hint { font-size: 0.75rem; color: var(--color-text-muted); }
+.tchat-details {
+  width: 100%; font-size: 0.8125rem; background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-control); padding: var(--space-2) var(--space-3);
+}
+.tchat-details summary { cursor: pointer; font-weight: 600; color: var(--color-primary-text); }
+.tchat-hit { margin-top: var(--space-2); padding-top: var(--space-2); border-top: 1px dashed var(--color-border); }
+.tchat-note { padding: var(--space-2) var(--space-3); border-radius: var(--radius-control); font-size: 0.8125rem; }
+.tchat-note-warn { background: var(--color-warning-soft); color: var(--color-warning-text); }
+.tchat-note-error { align-self: center; background: var(--color-danger-soft); color: var(--color-danger-text); }
+.tchat-empty {
+  margin: auto; text-align: center; color: var(--color-text-muted); display: flex; flex-direction: column;
+  align-items: center; gap: var(--space-2);
+}
+.tchat-empty > i { font-size: 2rem; color: var(--color-primary-text); }
+.tchat-empty p { margin: 0; }
+.tchat-samples { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-2); }
+.tchat-sample {
+  border: 1px solid var(--color-control-border); background: var(--color-surface); color: var(--color-primary-text);
+  border-radius: 999px; padding: 4px 14px; font-size: 0.8125rem;
+}
+.tchat-sample:hover { background: var(--color-primary-light); }
+.tchat-typing { display: inline-flex; gap: 4px; align-items: center; height: 18px; }
+.tchat-typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--color-text-secondary); animation: tchat-dot 1.2s infinite ease-in-out; }
+.tchat-typing i:nth-child(2) { animation-delay: 0.15s; }
+.tchat-typing i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes tchat-dot { 0%, 60%, 100% { opacity: 0.3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+.tchat-composer {
+  display: flex; align-items: flex-end; gap: var(--space-2); padding: var(--space-2) var(--space-3);
+  background: var(--color-surface); border-top: 1px solid var(--color-border);
+}
+.tchat-input {
+  flex: 1; resize: none; max-height: 120px; min-height: 40px; padding: 9px 16px; font-size: 0.875rem;
+  border: 1px solid var(--color-control-border); border-radius: 20px; background: var(--color-background);
+  color: var(--color-text-primary); field-sizing: content;
+}
+.tchat-input:focus { outline: 2px solid var(--color-primary); outline-offset: 0; }
+.tchat-send {
+  flex: none; width: 40px; height: 40px; border: 0; border-radius: 50%;
+  background: var(--color-primary); color: var(--color-on-primary); display: inline-flex; align-items: center; justify-content: center;
+}
+.tchat-send:hover:not(:disabled) { background: var(--color-primary-dark); }
+.tchat-send:disabled { opacity: 0.45; }
+.tchat-foot { margin: var(--space-2) 0 0; font-size: 0.75rem; color: var(--color-text-muted); }
+@media (prefers-reduced-motion: reduce) { .tchat-typing i { animation: none; opacity: 0.6; } }
+
+/* Memory panel under a customer's thread (Pesan page). */
+.memory-panel {
+  margin-top: var(--space-3); padding: var(--space-3); background: var(--color-surface);
+  border: 1px solid var(--color-border); border-radius: var(--radius-control);
+}
+
+/* Admin reply box under a thread that a person has taken over. */
+.admin-composer { display: flex; gap: var(--space-2); align-items: flex-end; margin-top: var(--space-3); }
+.admin-composer textarea { resize: none; }
+
+/* Filter above the conversation list on the Pesan page. */
+.chat-filter { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-bottom: var(--space-3); }
+.chat-filter-btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; font-size: 0.75rem; font-weight: 600;
+  border: 1px solid var(--color-control-border); border-radius: 999px;
+  background: var(--color-surface); color: var(--color-primary-text);
+}
+.chat-filter-btn:hover { background: var(--color-primary-light); }
+.chat-filter-btn.is-active { background: var(--color-primary); border-color: var(--color-primary); color: var(--color-on-primary); }
+.chat-filter-count { font-weight: 500; opacity: 0.8; }
+
+/* Bulk selection on the Pesan page. */
+.bulk-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-3);
+  padding: var(--space-2) var(--space-3); background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+}
+.chat-pick { display: flex; align-items: center; gap: var(--space-2); }
+.chat-pick .chat-row { flex: 1; min-width: 0; }
+.chat-pick-box { flex: none; margin: 0; }

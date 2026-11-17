@@ -74,7 +74,7 @@ function setup(opts: { empty?: boolean } = {}) {
   const conv = new ConversationStore(db, clock)
   const gateway = new FakeGateway()
   const handoff = new HandoffService({ gateway, conv, clock })
-  const agent = new ConversationAgent({ store, catalog, conv, handoff, gateway, clock })
+  const agent = new ConversationAgent({ store, catalog, conv, handoff, gateway, clock, retryDelaysMs: [0, 0] })
   return { clock, db, store, catalog, conv, gateway, handoff, agent }
 }
 
@@ -107,6 +107,111 @@ describe('retrieval uses the conversation so far', () => {
     const p = scripted([out({ reply_parts: ['ok'] })])
     await turn(t, toko(), p.provider, 'domain dan hosting')
     expect(p.calls[0].user).toContain('sudah termasuk domain dan hosting')
+  })
+})
+
+describe('memory', () => {
+  const upd = (u: unknown) => out({ reply_parts: ['ok'], intent: 'sapaan', sources: [], memory_updates: u })
+  it('stores new facts after a turn, replaces changed ones and forgets with null', async () => {
+    const t = setup()
+    await turn(t, toko(), scripted([upd({ budget: 'sekitar 5 juta', kota: 'Palu' })]).provider, 'halo')
+    expect(t.conv.getMemory(C).facts).toEqual({ budget: 'sekitar 5 juta', kota: 'Palu' })
+    await turn(t, toko(), scripted([upd({ budget: 'sekitar 7 juta', kota: null })]).provider, 'budget saya naik')
+    expect(t.conv.getMemory(C).facts).toEqual({ budget: 'sekitar 7 juta' })
+  })
+  it('ignores a malformed memory_updates and still replies', async () => {
+    const t = setup()
+    const r = await turn(t, toko(), scripted([upd('rusak')]).provider, 'halo')
+    expect(r.fallback).toBe(false)
+    expect(r.replyParts).toEqual(['ok'])
+    expect(t.conv.getMemory(C).facts).toEqual({})
+  })
+  it('writes nothing on a dry run, and nothing is read or written when memory is off', async () => {
+    const t = setup()
+    t.conv.setFacts(C, { budget: '5 juta' })
+    const dry = scripted([upd({ kota: 'Palu' })])
+    await turn(t, toko(), dry.provider, 'halo', { dryRun: true })
+    expect(t.conv.getMemory(C).facts).toEqual({ budget: '5 juta' })
+    expect(dry.calls[0].user).toContain('budget: 5 juta')
+    const off = scripted([upd({ kota: 'Palu' })])
+    await turn(t, toko(), off.provider, 'halo', { memory: false })
+    expect(off.calls[0].user).not.toContain('<memori>')
+    expect(t.conv.getMemory(C).facts).toEqual({ budget: '5 juta' })
+  })
+  it('shows the saved summary and facts, and only turns after the fold, each trimmed to 400 characters', async () => {
+    const t = setup()
+    for (let i = 1; i <= 14; i++) t.conv.appendTurn(C, i % 2 ? 'user' : 'bot', i === 14 ? 'z'.repeat(900) : `pesan ke-${i}`)
+    const ids = t.conv.unsummarizedTurns(C)
+    t.conv.setSummary(C, 'Pelanggan tanya paket website UMKM.', ids[3].id)
+    t.conv.setFacts(C, { budget: 'sekitar 5 juta' })
+    const p = scripted([upd({})])
+    await turn(t, toko(), p.provider, 'lanjut ya')
+    const u = p.calls[0].user
+    expect(u).toContain('<ringkasan>Pelanggan tanya paket website UMKM.</ringkasan>')
+    expect(u).toContain('budget: sekitar 5 juta')
+    expect(u).not.toContain('pesan ke-4')
+    expect(u).toContain('pesan ke-5')
+    expect(u).toContain('z'.repeat(400))
+    expect(u).not.toContain('z'.repeat(401))
+  })
+})
+
+describe('memory: folding old turns into the summary', () => {
+  const fill = (t: ReturnType<typeof setup>, n: number, step = 1000) => {
+    for (let i = 1; i <= n; i++) { t.conv.appendTurn(C, i % 2 ? 'user' : 'bot', `pesan ${i}`); t.clock.t += step }
+  }
+  const summarizer = (reply: string | Error) => scripted([reply])
+  const cfgM = { model: 'm' }
+  const HOUR = 3_600_000
+
+  it('writes a summary when there are more than sixteen unsummarised turns, keeping the newest ten', async () => {
+    const t = setup()
+    fill(t, 20)
+    const s = summarizer('Pelanggan tanya paket website.')
+    expect(await t.agent.maybeFold({ chatId: C, provider: s.provider, cfg: cfgM })).toBe(true)
+    expect(s.calls).toHaveLength(1)
+    expect(s.calls[0].user).toContain('pesan 10')
+    expect(s.calls[0].user).not.toContain('pesan 11')
+    const m = t.conv.getMemory(C)
+    expect(m.summary).toBe('Pelanggan tanya paket website.')
+    expect(t.conv.unsummarizedTurns(C).map((x) => x.text)).toEqual(Array.from({ length: 10 }, (_, i) => `pesan ${i + 11}`))
+  })
+  it('does not call the provider for a normal-length chat', async () => {
+    const t = setup()
+    fill(t, 12)
+    const s = summarizer('x')
+    expect(await t.agent.maybeFold({ chatId: C, provider: s.provider, cfg: cfgM })).toBe(false)
+    expect(s.calls).toHaveLength(0)
+  })
+  it('folds the earlier visit after a silence of six hours or more', async () => {
+    const t = setup()
+    fill(t, 4)
+    t.clock.t += 7 * HOUR
+    fill(t, 2)
+    const s = summarizer('Kunjungan lama: tanya harga.')
+    expect(await t.agent.maybeFold({ chatId: C, provider: s.provider, cfg: cfgM })).toBe(true)
+    expect(t.conv.unsummarizedTurns(C).map((x) => x.text)).toEqual(['pesan 1', 'pesan 2'])
+  })
+  it('on failure changes nothing, never throws, and the next call can succeed', async () => {
+    const t = setup()
+    fill(t, 20)
+    expect(await t.agent.maybeFold({ chatId: C, provider: summarizer(new Error('down')).provider, cfg: cfgM })).toBe(false)
+    expect(await t.agent.maybeFold({ chatId: C, provider: summarizer('   ').provider, cfg: cfgM })).toBe(false)
+    expect(t.conv.getMemory(C)).toEqual({ summary: '', facts: {}, summarizedUpTo: 0 })
+    expect(t.conv.unsummarizedTurns(C)).toHaveLength(20)
+    expect(await t.agent.maybeFold({ chatId: C, provider: summarizer('ok').provider, cfg: cfgM })).toBe(true)
+  })
+  it('runs one summary at a time per chat', async () => {
+    const t = setup()
+    fill(t, 20)
+    let release!: (v: string) => void
+    let calls = 0
+    const slow: AiProvider = { complete: () => { calls++; return new Promise<string>((r) => { release = r }) } }
+    const first = t.agent.maybeFold({ chatId: C, provider: slow, cfg: cfgM })
+    expect(await t.agent.maybeFold({ chatId: C, provider: slow, cfg: cfgM })).toBe(false)
+    release('selesai')
+    expect(await first).toBe(true)
+    expect(calls).toBe(1)
   })
 })
 
@@ -273,12 +378,12 @@ describe('failures never reach the customer', () => {
       expect(r.replyParts.join(' ')).not.toMatch(/\{|json|error/i)
       expect(t.gateway.sent).toHaveLength(1)
     })
-    it(`product mode answers with the unknown template on ${name}`, async () => {
+    it(`product mode hands off too, after the same retries, on ${name}`, async () => {
       const t = setup()
       const r = await turn(t, toko(), scripted([o]).provider, 'halo mau tanya')
       expect(r.fallback).toBe(true)
-      expect(r.replyParts).toEqual([UNKNOWN])
-      expect(r.handoff).toBeNull()
+      expect(r.handoff).toEqual({ reason: 'ai_gagal' })
+      expect(r.replyParts).not.toEqual([UNKNOWN])
     })
   }
   it('times out cleanly when the provider never answers', async () => {
@@ -286,7 +391,51 @@ describe('failures never reach the customer', () => {
     const hang: AiProvider = { complete: () => new Promise(() => undefined) }
     const r = await turn(t, toko(), hang, 'halo', { timeoutMs: 30 })
     expect(r.fallback).toBe(true)
-    expect(r.replyParts).toEqual([UNKNOWN])
+    expect(r.fallbackReason).toBe('timeout')
+    expect(r.attempts).toBe(3)
+    expect(r.handoff).toEqual({ reason: 'ai_gagal' })
+  })
+  it('tries three times with a pause between, and a later success is used without any handoff', async () => {
+    const t = setup()
+    const s = scripted([new Error('network down'), 'bukan json', out({ reply_parts: ['Halo Kak, ada yang bisa dibantu?'], intent: 'sapaan', sources: [] })])
+    const r = await turn(t, toko(), s.provider, 'halo')
+    expect(s.calls).toHaveLength(3)
+    expect(r.fallback).toBe(false)
+    expect(r.handoff).toBeNull()
+    expect(r.replyParts).toEqual(['Halo Kak, ada yang bisa dibantu?'])
+  })
+  it('hands off to the admin only after three failed attempts in a row', async () => {
+    const t = setup()
+    const s = scripted([new Error('network down')])
+    const r = await turn(t, jasa(), s.provider, 'halo')
+    expect(s.calls).toHaveLength(3)
+    expect(r.attempts).toBe(3)
+    expect(r.handoff).toEqual({ reason: 'ai_gagal' })
+    expect(t.gateway.sent.length).toBeGreaterThan(0)
+  })
+  it('does not retry a rejected key', async () => {
+    const t = setup()
+    const s = scripted([e401])
+    const r = await turn(t, toko(), s.provider, 'halo')
+    expect(s.calls).toHaveLength(1)
+    expect(r.attempts).toBe(1)
+    expect(r.fallbackReason).toBe('auth')
+  })
+  it('waits the configured pause between attempts', async () => {
+    const t = setup()
+    const slow = new ConversationAgent({
+      store: t.store, catalog: t.catalog, conv: t.conv, handoff: t.handoff, gateway: t.gateway, clock: t.clock, retryDelaysMs: [40, 40]
+    })
+    const s = scripted([new Error('network down')])
+    const started = Date.now()
+    await slow.handleTurn({ chatId: 'c1', text: 'halo', profile: toko(), provider: s.provider, cfg: { model: 'm', maxTokens: 100 }, dryRun: true })
+    expect(Date.now() - started).toBeGreaterThanOrEqual(70)
+    expect(s.calls).toHaveLength(3)
+  })
+  it('says why the fallback was used: unusable output vs rejected key', async () => {
+    const t = setup()
+    expect((await turn(t, toko(), scripted(['{"intent":"tanya_pro']).provider, 'halo')).fallbackReason).toBe('unusable')
+    expect((await turn(t, toko(), scripted([e401]).provider, 'halo')).fallbackReason).toBe('auth')
   })
 })
 

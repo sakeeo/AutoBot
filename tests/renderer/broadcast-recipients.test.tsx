@@ -2,6 +2,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react'
 import { BroadcastPage } from '../../src/renderer/pages/BroadcastPage'
+import { ContactsPage } from '../../src/renderer/pages/ContactsPage'
 import type { BContact, OverviewView } from '../../src/shared/broadcast'
 
 const safety = {
@@ -9,7 +10,7 @@ const safety = {
   window: { start: '09:00', end: '20:00', timezone: 'Asia/Makassar' }, minGapDays: 7
 }
 const overview = (o: Partial<OverviewView> = {}): OverviewView => ({
-  contacts: { aktif: 2, menunggu_persetujuan: 0, tidak_aktif: 0 }, suppressed: 0, pendingConfirm: 0, safety,
+  contacts: { aktif: 2, menunggu_persetujuan: 0, tidak_aktif: 0 }, suppressed: 0, pendingConfirm: 0, warmup: false, safety,
   health: { level: 'aman', reason: 'Tidak ada tanda bahaya.' }, runningCampaignId: null, ...o
 })
 const contact = (o: Partial<BContact> = {}): BContact => ({
@@ -28,7 +29,7 @@ function setApi(over: Record<string, unknown> = {}) {
       invalid: [{ row: 4, value: '123', reason: 'Nomor tidak valid.' }], sample: [{ number: '6281234567890', name: 'Budi' }]
     }),
     bcImportCommit: vi.fn().mockResolvedValue({ importId: 1, added: 2, notOnWhatsApp: 0, blockedBySuppression: 0, aborted: false }),
-    bcEraseContact: vi.fn().mockResolvedValue(undefined), bcAddContact: vi.fn(),
+    bcEraseContact: vi.fn().mockResolvedValue(undefined), bcAddContact: vi.fn(), bcSetWarmup: vi.fn(),
     bcCampaigns: vi.fn().mockResolvedValue([]), bcGetSafety: vi.fn().mockResolvedValue(safety),
     bcStopAll: vi.fn().mockResolvedValue(undefined), bcSetSafety: vi.fn().mockResolvedValue({ ok: true, safety }),
     onBroadcast: vi.fn().mockReturnValue(() => undefined),
@@ -40,23 +41,23 @@ function setApi(over: Record<string, unknown> = {}) {
 afterEach(cleanup)
 
 async function openRecipients() {
-  render(<BroadcastPage />)
-  fireEvent.click(await screen.findByRole('tab', { name: 'Penerima' }))
+  render(<ContactsPage />)
+  await screen.findByRole('heading', { level: 2, name: 'Kontak' })
 }
 
 describe('BroadcastPage', () => {
-  it('has a single title, the four tabs and a dismissible note about the official route', async () => {
+  it('has a single title, the three tabs (contacts live in their own menu) and a dismissible note about the official route', async () => {
     setApi()
     render(<BroadcastPage />)
     expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent?.trim())).toEqual(['Broadcast'])
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Kampanye', 'Penerima', 'Keamanan', 'Laporan'])
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Kampanye', 'Keamanan', 'Laporan'])
     expect(screen.getByText(/whatsapp business platform/i)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Tutup catatan' }))
     expect(screen.queryByText(/whatsapp business platform/i)).toBeNull()
   })
 })
 
-describe('Recipients tab', () => {
+describe('Contacts page', () => {
   it('lists contacts with a text status and shows empty and error states', async () => {
     setApi()
     await openRecipients()
@@ -67,11 +68,11 @@ describe('Recipients tab', () => {
     cleanup()
     setApi({ bcContacts: vi.fn().mockResolvedValue([]) })
     await openRecipients()
-    expect(await screen.findByText(/belum ada penerima/i)).toBeTruthy()
+    expect(await screen.findByText(/belum ada kontak/i)).toBeTruthy()
     cleanup()
     setApi({ bcContacts: vi.fn().mockRejectedValue(new Error('x')) })
     await openRecipients()
-    expect((await screen.findByRole('alert')).textContent).toMatch(/gagal memuat penerima/i)
+    expect((await screen.findByRole('alert')).textContent).toMatch(/gagal memuat kontak/i)
   })
 
   it('filters by status through the backend', async () => {
@@ -96,6 +97,37 @@ describe('Recipients tab', () => {
     await openRecipients()
     fireEvent.click(await screen.findByRole('button', { name: 'Kirim konfirmasi' }))
     expect(await screen.findByText('Lengkapi pengaturan keamanan.')).toBeTruthy()
+  })
+
+  it('searches by name or number without calling the backend again', async () => {
+    const api = setApi()
+    await openRecipients()
+    await screen.findByText('Budi')
+    const calls = api.bcContacts.mock.calls.length
+    fireEvent.change(screen.getByLabelText('Cari kontak'), { target: { value: 'sari' } })
+    expect(screen.queryByText('Budi')).toBeNull()
+    expect(screen.getByText('Sari')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Cari kontak'), { target: { value: '0812-9876' } })
+    expect(screen.queryByText('Budi')).toBeNull()
+    expect(screen.getByText('Sari')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Cari kontak'), { target: { value: 'tidak ada' } })
+    expect(await screen.findByText(/tidak ada kontak yang cocok/i)).toBeTruthy()
+    expect(api.bcContacts.mock.calls.length).toBe(calls)
+  })
+
+  it('has a warm-up switch that follows the backend and reports a refusal', async () => {
+    const api = setApi({ bcSetWarmup: vi.fn().mockResolvedValue({ ok: true, enabled: true }) })
+    await openRecipients()
+    const sw = (await screen.findByLabelText(/hubungi kontak yang belum aktif/i)) as HTMLInputElement
+    expect(sw.checked).toBe(false)
+    fireEvent.click(sw)
+    await waitFor(() => expect(api.bcSetWarmup).toHaveBeenCalledWith(true))
+    expect(await screen.findByText('Warming-up otomatis dinyalakan.')).toBeTruthy()
+    cleanup()
+    setApi({ bcSetWarmup: vi.fn().mockResolvedValue({ ok: false, error: 'Lengkapi dan aktifkan pengaturan keamanan dulu (tab Keamanan).' }) })
+    await openRecipients()
+    fireEvent.click(await screen.findByLabelText(/hubungi kontak yang belum aktif/i))
+    expect(await screen.findByText(/lengkapi dan aktifkan pengaturan keamanan/i)).toBeTruthy()
   })
 
   it('shows the suppression list read-only: no way to remove anyone from it', async () => {
@@ -171,8 +203,7 @@ describe('Import wizard', () => {
 describe('Add contact by hand', () => {
   async function openForm(over: Record<string, unknown> = {}) {
     const api = setApi({ bcAddContact: vi.fn().mockResolvedValue({ ok: true, added: 1, notOnWhatsApp: 0, blockedBySuppression: 0 }), ...over })
-    render(<BroadcastPage />)
-    fireEvent.click(await screen.findByRole('tab', { name: /penerima/i }))
+    render(<ContactsPage />)
     fireEvent.click(await screen.findByRole('button', { name: 'Tambah kontak' }))
     return api
   }

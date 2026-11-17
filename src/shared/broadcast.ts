@@ -32,6 +32,8 @@ export interface Campaign {
   createdAt: number
   startedAt: number | null
   audience: Audience
+  /** Recipients picked by hand; null means everyone in the audience. */
+  contactIds: number[] | null
   notBefore: number | null
 }
 
@@ -42,8 +44,14 @@ export const AttestSchema = z
   .object({ accepted: z.literal(true), sourceNote: z.string().trim().min(10).max(300) })
   .strict()
 export const CampaignInputSchema = z
-  .object({ name: z.string().trim().min(1).max(100), template: z.string().min(1).max(1000), audience: z.enum(['chat', 'impor', 'semua']) })
+  .object({
+    name: z.string().trim().min(1).max(100),
+    template: z.string().min(1).max(1000),
+    audience: z.enum(['chat', 'impor', 'semua']),
+    contactIds: z.array(z.number().int().positive()).min(1).max(50_000).nullable().optional()
+  })
   .strict()
+export const AudienceSchema = z.enum(['chat', 'impor', 'semua'])
 export const AddContactSchema = z
   .object({
     name: z.string().trim().max(100),
@@ -85,6 +93,8 @@ export interface OverviewView {
   contacts: Record<ContactStatus, number>
   suppressed: number
   pendingConfirm: number
+  /** Automatic warm-up: contacts waiting for consent are asked, a little at a time, within the safety limits. */
+  warmup: boolean
   safety: SafetyView
   health: Health
   runningCampaignId: number | null

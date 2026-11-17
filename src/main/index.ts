@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, Notification, safeStorage } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, Notification, safeStorage } from 'electron'
 import { existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import pino from 'pino'
@@ -25,7 +25,7 @@ import { BroadcastEngine } from './broadcast/engine'
 import { ImportService } from './broadcast/import'
 import { OptOutHandler } from './broadcast/optout-handler'
 import { createBroadcastHandlers, loadSafety } from './broadcast/ipc'
-import { syncChatContacts } from './broadcast/audience'
+import { resolveLidContacts, syncChatContacts } from './broadcast/audience'
 import { normalizePhone } from './broadcast/identity'
 import { AuthStore } from './auth/auth-store'
 import { createAuthHandlers, lockAwareSend, redactWhenLocked, type AuthHandlers } from './auth/auth-ipc'
@@ -50,14 +50,17 @@ function createWindow(): BrowserWindow {
     width: 1100,
     height: 760,
     minWidth: 860,
-    title: 'WA Otomation',
+    minHeight: 560,
+    title: 'AutoBot',
+    // The page draws its own title bar (drag area + minimise / maximise / close).
+    frame: false,
     autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      devTools: !app.isPackaged
+      devTools: false
     }
   })
   // Any window created later (second launch after closing without a tray) must start locked too.
@@ -65,14 +68,13 @@ function createWindow(): BrowserWindow {
   // No File/Edit/Window menu bar on any platform; the page has its own navigation.
   w.removeMenu()
   w.setMenuBarVisibility(false)
-  // Without the menu there are no accelerators, so development keeps DevTools on F12 / Ctrl+Shift+I.
-  if (!app.isPackaged)
-    w.webContents.on('before-input-event', (e, input) => {
-      if (input.type === 'keyDown' && (input.key === 'F12' || (input.control && input.shift && input.key.toUpperCase() === 'I'))) {
-        e.preventDefault()
-        w.webContents.toggleDevTools()
-      }
-    })
+  // DevTools ("Inspect element") is switched off entirely, in development as well as in the packaged app.
+  w.webContents.on('devtools-opened', () => w.webContents.closeDevTools())
+  const announceMaximized = (): void => {
+    if (!w.isDestroyed()) w.webContents.send(C.evtWinMaximized, w.isMaximized())
+  }
+  w.on('maximize', announceMaximized)
+  w.on('unmaximize', announceMaximized)
   w.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   w.webContents.on('will-navigate', (e) => e.preventDefault())
   if (process.env['ELECTRON_RENDERER_URL']) w.loadURL(process.env['ELECTRON_RENDERER_URL'])
@@ -90,7 +92,22 @@ function createWindow(): BrowserWindow {
   return w
 }
 
+/** Window controls for the custom title bar. They act on the window that asked, and work while the app is locked. */
+function registerWindowControls(): void {
+  const from = (e: Electron.IpcMainInvokeEvent): BrowserWindow | null => BrowserWindow.fromWebContents(e.sender)
+  ipcMain.handle(C.winMinimize, (e) => { from(e)?.minimize() })
+  ipcMain.handle(C.winToggleMaximize, (e) => {
+    const w = from(e)
+    if (!w) return
+    if (w.isMaximized()) w.unmaximize()
+    else w.maximize()
+  })
+  ipcMain.handle(C.winClose, (e) => { from(e)?.close() })
+  ipcMain.handle(C.winIsMaximized, (e) => from(e)?.isMaximized() ?? false)
+}
+
 function boot(): void {
+  registerWindowControls()
   const data = app.getPath('userData')
   const logger = pino({ level: 'info' })
   const db = openDb(join(data, 'wa-otomation.db'))
@@ -184,7 +201,7 @@ function boot(): void {
   }
   gateway.onStatus((s) => {
     status = s
-    if (s.state === 'connected') protectNumbers()
+    if (s.state === 'connected') { protectNumbers(); syncAudience() }
     send(C.evtStatus, s)
     tray?.refresh(STATUS_LABEL[s.state])
   })
@@ -232,6 +249,9 @@ function boot(): void {
   protectNumbers()
   const syncAudience = (): void => {
     try { syncChatContacts(db, bstore, Date.now()); bstore.expirePending(Date.now()) } catch (err) { logger.warn({ err }, 'broadcast audience sync failed') }
+    if (status.state === 'connected' && gateway.phoneJidForLid) {
+      resolveLidContacts(db, bstore, (lid) => gateway.phoneJidForLid!(lid)).catch((err) => logger.warn({ err }, 'lid lookup failed'))
+    }
   }
   syncAudience()
   setInterval(syncAudience, 10 * 60_000)
@@ -264,11 +284,18 @@ function boot(): void {
     businessName: () => brandStore.getActive().identity.businessName.trim() || 'kami'
   })
 
+  // Warm-up (when switched on): look every few minutes for contacts still waiting for consent.
+  const warmup = (): void => {
+    try { broadcast.warmupTick() } catch (err) { logger.warn({ err }, 'warm-up failed') }
+  }
+  warmup()
+  setInterval(warmup, 10 * 60_000)
+
   registerIpc({
     broadcast,
     brandHandlers,
     auth: authHandlers,
-    feed,
+    feed, conv,
     gateway, getStatus: () => status, indexer, store, settings, secrets, pipeline, db, makeProvider,
     getWindow: () => win,
     onSettingsChanged: (prev, next) => {
@@ -283,6 +310,10 @@ function boot(): void {
   if (existsSync(join(sessionDir, 'creds.json'))) gateway.connect().catch((e) => logger.error(e))
 }
 
+// The product is now called AutoBot, but the data stays where it always was (sessions, database, settings).
+// This must run before anything reads userData, including the single-instance lock.
+app.setPath('userData', join(app.getPath('appData'), 'wa-otomation'))
+app.setName('AutoBot')
 const gotLock = app.requestSingleInstanceLock()
 if (!gotLock) {
   app.quit()
@@ -290,6 +321,7 @@ if (!gotLock) {
   app.on('second-instance', () => showWindow())
   app.on('before-quit', () => { quitting = true })
   app.whenReady().then(() => {
+    app.setAppUserModelId('id.kerabatkoding.autobot')
     // macOS always has a menu bar; keep only the app and Edit roles there so Cmd+Q / Cmd+C / Cmd+V keep working.
     Menu.setApplicationMenu(process.platform === 'darwin' ? Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }]) : null)
     boot()

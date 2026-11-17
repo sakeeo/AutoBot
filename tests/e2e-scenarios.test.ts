@@ -77,7 +77,7 @@ async function setup(businessType: 'produk' | 'jasa', replies: string[]) {
   const gateway = new FakeGateway()
   const conv = new ConversationStore(db, clock)
   const handoff = new HandoffService({ gateway, conv, clock })
-  const agent = new ConversationAgent({ store, catalog, conv, handoff, gateway, clock })
+  const agent = new ConversationAgent({ store, catalog, conv, handoff, gateway, clock, retryDelaysMs: [0, 0] })
   const settings = new SettingsStore(join(mkdtempSync(join(tmpdir(), 'wa-e2e-')), 's.json'))
   settings.update({ mode: 'ai' })
 

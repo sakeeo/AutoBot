@@ -1,5 +1,6 @@
-appId: id.kerabatkoding.wa-otomation
-productName: WA Otomation
+appId: id.kerabatkoding.autobot
+productName: AutoBot
+copyright: Kerabat Koding
 directories:
   output: dist
   buildResources: build
@@ -16,7 +17,10 @@ win:
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
+  shortcutName: AutoBot
 linux:
+  executableName: autobot
+  synopsis: AutoBot — Balas WA Otomatis pakai AI
   target:
     - AppImage
     - deb

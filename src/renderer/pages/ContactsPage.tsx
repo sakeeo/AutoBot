@@ -1,17 +1,18 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { BContact, ContactStatus, OverviewView, SuppressReason } from '../../shared/broadcast'
 import { Card } from '../ui/Card'
 import { ConfirmButton } from '../ui/ConfirmButton'
 import { DataTable } from '../ui/DataTable'
+import { PageHeader } from '../ui/PageHeader'
 import { EmptyState, ErrorState, LoadingState } from '../ui/States'
 import { StatusBadge } from '../ui/StatusBadge'
-import { AddContactForm } from './AddContactForm'
-import { ImportWizard } from './ImportWizard'
-import { REASON_LABEL, SOURCE_LABEL, STATUS_LABEL, STATUS_TONE, formatTime } from './labels'
+import { AddContactForm } from '../broadcast/AddContactForm'
+import { ImportWizard } from '../broadcast/ImportWizard'
+import { REASON_LABEL, SOURCE_LABEL, STATUS_LABEL, STATUS_TONE, formatTime } from '../broadcast/labels'
 
 type Suppressed = { number: string | null; jid: string | null; reason: SuppressReason; at: number }
 
-export function RecipientsTab() {
+export function ContactsPage() {
   const [filter, setFilter] = useState<ContactStatus | ''>('')
   const [contacts, setContacts] = useState<BContact[] | null>(null)
   const [failed, setFailed] = useState(false)
@@ -20,6 +21,7 @@ export function RecipientsTab() {
   const [importing, setImporting] = useState(false)
   const [adding, setAdding] = useState(false)
   const [message, setMessage] = useState<{ kind: 'success' | 'danger'; text: string } | null>(null)
+  const [query, setQuery] = useState('')
 
   const load = useCallback(() => {
     setFailed(false)
@@ -35,9 +37,26 @@ export function RecipientsTab() {
     load()
   }
 
+  async function toggleWarmup(on: boolean): Promise<void> {
+    const r = await window.api.bcSetWarmup(on)
+    setMessage(r.ok ? { kind: 'success', text: on ? 'Warming-up otomatis dinyalakan.' : 'Warming-up otomatis dimatikan.' } : { kind: 'danger', text: r.error })
+    load()
+  }
+
+  const shown = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return contacts
+    // Numbers are stored as 62812…, but people type 0812….
+    const typed = q.replace(/\D/g, '')
+    const digits = typed.startsWith('0') ? `62${typed.slice(1)}` : typed
+    return contacts?.filter((c) => c.name.toLowerCase().includes(q) || (digits !== '' && (c.number ?? '').includes(digits))) ?? null
+  }, [contacts, query])
+
   const pending = overview?.pendingConfirm ?? 0
   return (
     <div>
+      <PageHeader icon="bi-people" title="Kontak"
+        subtitle="Semua orang yang pernah menghubungi bot atau Anda tambahkan. Penerima broadcast diambil dari sini." />
       {message && <div className={`alert alert-${message.kind}`} role="status">{message.text}</div>}
 
       <div className="d-flex flex-wrap gap-2 mb-3">
@@ -51,6 +70,7 @@ export function RecipientsTab() {
           <>
             <StatusBadge tone="success">{`${overview.contacts.aktif} aktif`}</StatusBadge>
             <StatusBadge tone="warning">{`${overview.contacts.menunggu_persetujuan} menunggu`}</StatusBadge>
+            <StatusBadge tone="neutral">{`${overview.contacts.tidak_aktif} tidak aktif`}</StatusBadge>
             <StatusBadge tone="neutral">{`${overview.suppressed} di daftar tolak`}</StatusBadge>
           </>
         )}
@@ -67,9 +87,27 @@ export function RecipientsTab() {
         </div>
       )}
 
-      <Card title="Penerima" className="mb-3"
+      {overview && (
+        <Card title="Warming-up otomatis" className="mb-3" aria-label="Warming-up otomatis">
+          <div className="form-check form-switch">
+            <input className="form-check-input" type="checkbox" role="switch" id="warmup" checked={overview.warmup}
+              onChange={(e) => void toggleWarmup(e.target.checked)} />
+            <label className="form-check-label" htmlFor="warmup">Hubungi kontak yang belum aktif secara otomatis</label>
+          </div>
+          <div className="form-text">
+            {`Kontak yang masih menunggu persetujuan (${pending} saat ini) dikirimi pesan izin "Balas YA jika setuju", sedikit demi sedikit. `}
+            Kecepatannya mengikuti batas keamanan: jumlah harian sesuai usia nomor, hanya di jam kirim, jeda acak antar pesan,
+            istirahat antar kelompok, dan berhenti sendiri bila ada tanda bahaya. Yang membalas YA menjadi aktif.
+          </div>
+        </Card>
+      )}
+
+      <Card title="Daftar kontak" className="mb-3"
         actions={
-          <div>
+          <div className="d-flex gap-2">
+            <label htmlFor="contact-search" className="visually-hidden">Cari kontak</label>
+            <input id="contact-search" type="search" className="form-control form-control-sm" placeholder="Cari nama atau nomor"
+              value={query} onChange={(e) => setQuery(e.target.value)} />
             <label htmlFor="status-filter" className="visually-hidden">Filter status</label>
             <select id="status-filter" className="form-select form-select-sm" value={filter}
               onChange={(e) => setFilter(e.target.value as ContactStatus | '')}>
@@ -81,16 +119,16 @@ export function RecipientsTab() {
           </div>
         }>
         {failed ? (
-          <ErrorState message="Gagal memuat penerima." onRetry={load} />
-        ) : contacts === null ? (
+          <ErrorState message="Gagal memuat kontak." onRetry={load} />
+        ) : shown === null ? (
           <LoadingState />
         ) : (
           <DataTable<BContact>
-            caption="Penerima broadcast"
-            rows={contacts}
+            caption="Daftar kontak"
+            rows={shown}
             rowKey={(c) => String(c.id)}
             pageSize={10}
-            empty={<EmptyState title="Belum ada penerima." hint="Kontak yang pernah menghubungi bot muncul otomatis; atau tambah kontak dan impor daftar Anda." />}
+            empty={<EmptyState title={query.trim() ? 'Tidak ada kontak yang cocok.' : 'Belum ada kontak.'} hint="Kontak yang pernah menghubungi bot muncul otomatis; atau tambah kontak dan impor daftar Anda." />}
             columns={[
               { key: 'number', header: 'Nomor', render: (c) => c.number ?? '(id chat)' },
               { key: 'name', header: 'Nama', render: (c) => c.name || '–' },

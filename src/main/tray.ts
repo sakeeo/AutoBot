@@ -10,12 +10,12 @@ export function createTray(opts: { iconPath: string; showWindow(): void }): Tray
     const icon = nativeImage.createFromPath(opts.iconPath)
     if (icon.isEmpty()) return null
     const tray = new Tray(icon)
-    tray.setToolTip('WA Otomation')
+    tray.setToolTip('AutoBot — Balas WA Otomatis pakai AI')
     tray.on('click', () => opts.showWindow())
     const refresh = (statusLabel: string): void => {
       tray.setContextMenu(
         Menu.buildFromTemplate([
-          { label: 'Buka WA Otomation', click: () => opts.showWindow() },
+          { label: 'Buka AutoBot', click: () => opts.showWindow() },
           { label: `Status: ${statusLabel}`, enabled: false },
           { type: 'separator' },
           { label: 'Keluar', click: () => app.quit() }

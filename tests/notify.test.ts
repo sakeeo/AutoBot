@@ -36,7 +36,7 @@ describe('incomingNotification', () => {
   })
   it('hides both the sender and the text while the app is locked', () => {
     const n = incomingNotification(msg(), ctx({ locked: true }))!
-    expect(n).toEqual({ title: 'WA Otomation', body: 'Ada pesan baru' })
+    expect(n).toEqual({ title: 'AutoBot', body: 'Ada pesan baru' })
     expect(JSON.stringify(n)).not.toMatch(/6281|harga/)
   })
   it('still respects the switch and freshness while locked', () => {

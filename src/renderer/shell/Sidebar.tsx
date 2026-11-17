@@ -39,7 +39,13 @@ export function Sidebar({ page, onSelect, settingsOpen, onToggleSettings, drawer
   )
   const content = (
     <>
-      <div className="sidebar-brand"><i className="bi bi-robot" aria-hidden="true" />{id.appName}</div>
+      <div className="sidebar-brand">
+        <i className="bi bi-robot" aria-hidden="true" />
+        <span>
+          <span className="sidebar-name">{id.appName}</span>
+          <span className="sidebar-tagline">{id.tagline}</span>
+        </span>
+      </div>
       <ul className="sidebar-list">
         {TOP_ITEMS.map(link)}
         <li>
