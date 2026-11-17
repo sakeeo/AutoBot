@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { writeFileSync, rmSync, mkdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { openDb } from '../src/main/db'
 import { IndexStore } from '../src/main/knowledge/index-store'
 import { Indexer } from '../src/main/knowledge/indexer'
@@ -38,7 +38,7 @@ describe('Indexer', () => {
     writeFileSync(join(dir, 'foto.png'), 'x')
     await indexer!.start([dir], [])
     const files = store.listFiles()
-    const byName = Object.fromEntries(files.map((f) => [f.file.split('/').pop(), f]))
+    const byName = Object.fromEntries(files.map((f) => [basename(f.file), f]))
     expect(byName['a.md'].status).toBe('indexed')
     expect(byName['b.txt'].status).toBe('indexed')
     expect(byName['kosong.txt']).toMatchObject({ status: 'failed', reason: 'EMPTY' })
@@ -53,7 +53,7 @@ describe('Indexer', () => {
     writeFileSync(join(dir, 'privat', 'gaji.md'), 'Gaji karyawan rahasia')
     writeFileSync(join(dir, 'umum.md'), 'Informasi umum toko')
     await indexer!.start([dir], ['privat/'])
-    expect(store.listFiles().map((f) => f.file.split('/').pop())).toEqual(['umum.md'])
+    expect(store.listFiles().map((f) => basename(f.file))).toEqual(['umum.md'])
   })
 
   it('re-indexes a changed file and drops a deleted one', async () => {
@@ -100,7 +100,7 @@ describe('Indexer', () => {
     const { dir } = setup()
     writeFileSync(join(dir, 'a.md'), 'isi dokumen')
     const seen: string[] = []
-    indexer!.on('status', (e) => seen.push(`${e.file.split('/').pop()}:${e.status}`))
+    indexer!.on('status', (e) => seen.push(`${basename(e.file)}:${e.status}`))
     await indexer!.start([dir], [])
     expect(seen).toContain('a.md:indexed')
   })

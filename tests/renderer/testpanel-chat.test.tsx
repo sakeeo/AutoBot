@@ -39,4 +39,17 @@ describe('Uji Jawaban as a chat', () => {
     fireEvent.click(screen.getByRole('button', { name: /bersihkan chat/i }))
     expect(screen.queryByText('Hai!')).toBeNull()
   })
+
+  it('shows only the file name of a retrieved document, for Windows and Linux paths alike', async () => {
+    const hit = (file: string) => ({ chunkId: 1, file, text: 'Harga kopi Rp25.000', coverage: 1, rank: -1 })
+    for (const file of ['C:\\Users\\x\\docs\\faq.md', '/home/x/docs/faq.md']) {
+      cleanup()
+      ;(window as any).api = { testQuestion: vi.fn().mockResolvedValue({
+        decision: { kind: 'answerable', hits: [hit(file)] }, answer: { text: 'Rp25.000', sources: [] }, via: 'extractive' }) }
+      render(<TestPanel />)
+      fireEvent.change(screen.getByLabelText(/pertanyaan/i), { target: { value: 'harga' } })
+      fireEvent.keyDown(screen.getByLabelText(/pertanyaan/i), { key: 'Enter' })
+      expect(await screen.findByText(/^faq\.md · skor 1\.00/)).toBeTruthy()
+    }
+  })
 })

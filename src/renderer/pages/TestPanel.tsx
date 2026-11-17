@@ -56,7 +56,7 @@ function BotTurn({ item }: { item: Extract<Item, { kind: 'bot' }> }) {
             <ul className="list-unstyled mb-0">
               {hits.map((h) => (
                 <li key={h.chunkId} className="tchat-hit">
-                  <div className="small text-body-secondary">{h.file.split('/').pop()} · skor {h.coverage.toFixed(2)}</div>
+                  <div className="small text-body-secondary">{h.file.split(/[\\/]/).pop()} · skor {h.coverage.toFixed(2)}</div>
                   <div style={{ whiteSpace: 'pre-wrap' }}>{h.text}</div>
                 </li>
               ))}
