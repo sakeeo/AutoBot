@@ -1,0 +1,20 @@
+# Public: set DOMAIN in deploy/.env (for example panel.contoh.id) and CADDYFILE=Caddyfile.
+# Caddy gets and renews the HTTPS certificate by itself; ports 80 and 443 must reach this machine.
+{$DOMAIN} {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+		-Server
+	}
+	@sse path /api/events
+	reverse_proxy @sse web:3000 {
+		flush_interval -1
+		transport http {
+			response_header_timeout 0
+		}
+	}
+	reverse_proxy web:3000
+}

@@ -1,0 +1,16 @@
+# Local: plain HTTP on this machine only (docker-compose binds 127.0.0.1:3000 to this port).
+{
+	auto_https off
+}
+:80 {
+	encode zstd gzip
+	# live events: do not buffer, so they arrive at once
+	@sse path /api/events
+	reverse_proxy @sse web:3000 {
+		flush_interval -1
+		transport http {
+			response_header_timeout 0
+		}
+	}
+	reverse_proxy web:3000
+}

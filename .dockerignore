@@ -1,0 +1,17 @@
+node_modules
+**/node_modules
+**/.next
+**/dist
+**/cli-dist
+.git
+.local-data
+deploy/secrets
+deploy/.env
+docs
+promo
+build
+out
+knowledge
+resources
+*.md
+!package*.json

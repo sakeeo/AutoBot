@@ -1,0 +1,95 @@
+# AutoBot: three services on four networks.
+#   caddy  -> the only door from outside (public + edge)
+#   web    -> the panel (edge + internal); no internet, no published port
+#   worker -> the bot (internal + egress); reaches WhatsApp, Google and the AI provider; no published port
+# Secrets are files in deploy/secrets (made by scripts/init.sh), mounted read-only; each service gets only its own.
+name: autobot
+
+services:
+  web:
+    build: { context: .., dockerfile: deploy/Dockerfile.web }
+    image: autobot-web:${TAG:-dev}
+    restart: unless-stopped
+    environment:
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      WORKER_URL: http://worker:4000
+      TRUSTED_PROXY_HOPS: "1"
+      WORKER_TOKEN_FILE: /run/secrets/worker_token
+      AUTH_SECRET_KEY_FILE: /run/secrets/auth_secret_key
+      SESSION_IDLE_MINUTES: ${SESSION_IDLE_MINUTES:-30}
+      SESSION_ABSOLUTE_HOURS: ${SESSION_ABSOLUTE_HOURS:-12}
+    secrets: [worker_token, auth_secret_key]
+    volumes:
+      - authdata:/authdata
+    networks: [edge, internal]
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/apps/web/.next/cache:uid=10001,gid=10001
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  worker:
+    build: { context: .., dockerfile: deploy/Dockerfile.worker }
+    image: autobot-worker:${TAG:-dev}
+    restart: unless-stopped
+    environment:
+      DATA_DIR: /data
+      WORKER_TOKEN_FILE: /run/secrets/worker_token
+      ENGINE_SECRET_KEY_FILE: /run/secrets/engine_secret_key
+    secrets: [worker_token, engine_secret_key]
+    volumes:
+      - data:/data
+    networks: [internal, egress]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 1g
+    stop_grace_period: 20s
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    ports:
+      # Local: only this machine can reach the panel. Public: CADDY_BIND=0.0.0.0, CADDY_HTTP_PORT=80, CADDY_HTTPS_PORT=443.
+      - "${CADDY_BIND:-127.0.0.1}:${CADDY_HTTP_PORT:-3000}:80"
+      - "${CADDY_BIND:-127.0.0.1}:${CADDY_HTTPS_PORT:-3443}:443"
+    volumes:
+      - ./${CADDYFILE:-Caddyfile.local}:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [public, edge]
+    depends_on: [web]
+
+networks:
+  public: {}
+  edge: { internal: true }
+  internal: { internal: true }
+  egress: {}
+
+volumes:
+  data: {}
+  authdata: {}
+  caddy_data: {}
+  caddy_config: {}
+
+secrets:
+  worker_token: { file: ./secrets/worker_token }
+  auth_secret_key: { file: ./secrets/auth_secret_key }
+  engine_secret_key: { file: ./secrets/engine_secret_key }

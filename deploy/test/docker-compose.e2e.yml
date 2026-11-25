@@ -1,0 +1,12 @@
+# TEST ONLY: swaps the real worker for the stub. Used with docker-compose.yml:
+#   docker compose -f docker-compose.yml -f test/docker-compose.e2e.yml up -d
+services:
+  worker:
+    build: !reset null
+    image: node:22-bookworm-slim
+    command: ["node", "/stub/stub-worker.mjs"]
+    environment: !override
+      NODE_ENV: test
+    secrets: !override [worker_token]
+    volumes: !override
+      - ./test:/stub:ro

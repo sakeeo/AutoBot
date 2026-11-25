@@ -1,0 +1,31 @@
+{
+  "name": "@autobot/web",
+  "private": true,
+  "version": "0.2.0",
+  "description": "Panel AutoBot: login, wizard setup, dan UI. Berbicara ke worker lewat API internal.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build && node build-cli.mjs",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@autobot/contracts": "*",
+    "@fontsource/inter": "^5.3.0",
+    "@node-rs/argon2": "^2.2.2",
+    "better-sqlite3": "^13.2.0",
+    "bootstrap": "^5.3.9",
+    "bootstrap-icons": "^1.13.2",
+    "next": "16.4.6",
+    "qrcode": "^1.5.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "esbuild": "^0.28.2"
+  }
+}

@@ -1,7 +1,16 @@
 node_modules
 out
 dist
+.next
 .superpowers
+*.tsbuildinfo
 
 # promo material (carousel, video)
 promo/
+
+.local-data/
+
+# deployment secrets and generated files (never commit)
+deploy/secrets/
+deploy/.env
+apps/web/cli-dist/

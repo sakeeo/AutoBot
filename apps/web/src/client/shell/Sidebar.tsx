@@ -1,0 +1,68 @@
+'use client'
+import Link from 'next/link'
+import { useEffect, useRef, type KeyboardEvent } from 'react'
+import { id } from '../i18n/id'
+import { SETTINGS_ITEMS, TOP_ITEMS, type NavItem, type NavKey } from '../nav'
+
+interface Props {
+  page: NavKey
+  onNavigate?(): void
+  settingsOpen: boolean
+  onToggleSettings(): void
+  drawer?: boolean
+}
+
+export function Sidebar({ page, onNavigate, settingsOpen, onToggleSettings, drawer }: Props) {
+  const box = useRef<HTMLDivElement>(null)
+
+  // As a modal drawer it takes focus when it opens (on the current page's entry) and keeps Tab inside.
+  useEffect(() => {
+    if (!drawer) return
+    const el = box.current
+    const target = el?.querySelector<HTMLElement>('[aria-current="page"]') ?? el?.querySelector<HTMLElement>('a, button')
+    target?.focus()
+  }, [drawer])
+  const trap = (e: KeyboardEvent): void => {
+    if (e.key !== 'Tab' || !box.current) return
+    const items = [...box.current.querySelectorAll<HTMLElement>('a, button')]
+    const first = items[0]
+    const last = items[items.length - 1]
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+  }
+
+  const link = (p: NavItem) => (
+    <li key={p.key}>
+      <Link href={p.href} className="sidebar-link" aria-current={p.key === page ? 'page' : undefined} onClick={onNavigate}>
+        <i className={`bi ${p.icon}`} aria-hidden="true" />{p.label}
+      </Link>
+    </li>
+  )
+  const content = (
+    <>
+      <div className="sidebar-brand">
+        <i className="bi bi-robot" aria-hidden="true" />
+        <span>
+          <span className="sidebar-name">{id.appName}</span>
+          <span className="sidebar-tagline">{id.tagline}</span>
+        </span>
+      </div>
+      <ul className="sidebar-list">
+        {TOP_ITEMS.map(link)}
+        <li>
+          <button type="button" className="sidebar-link" aria-expanded={settingsOpen} onClick={onToggleSettings}>
+            <i className="bi bi-gear" aria-hidden="true" />{id.nav.settings}
+            <i className={`bi chevron ${settingsOpen ? 'bi-chevron-up' : 'bi-chevron-down'}`} aria-hidden="true" />
+          </button>
+          {settingsOpen && <ul className="sidebar-list sidebar-sub">{SETTINGS_ITEMS.map(link)}</ul>}
+        </li>
+      </ul>
+    </>
+  )
+  if (!drawer) return <nav className="app-sidebar" aria-label="Menu utama">{content}</nav>
+  return (
+    <div ref={box} className="app-sidebar is-drawer" role="dialog" aria-modal="true" aria-label="Menu utama" onKeyDown={trap}>
+      <nav aria-label="Menu utama" className="sidebar-nav">{content}</nav>
+    </div>
+  )
+}

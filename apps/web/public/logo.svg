@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 512" width="1000" height="512" role="img" aria-label="AutoBot - Balas WA Otomatis pakai AI">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2A5F47"/>
+      <stop offset="1" stop-color="#163A29"/>
+    </linearGradient>
+  </defs>
+  <rect width="1000" height="512" fill="#EDE6D6"/>
+  <g transform="translate(0 56) scale(.78)">
+    <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+    <rect x="86" y="108" width="340" height="250" rx="76" fill="#EDE6D6"/>
+    <path d="M146 336 L122 428 L238 350 Z" fill="#EDE6D6"/>
+    <g transform="translate(240 236)"><path d="M0,-78 Q9,-9 78,0 Q9,9 0,78 Q-9,9 -78,0 Q-9,-9 0,-78 Z" fill="#F24A2B"/></g>
+    <g transform="translate(340 166)"><path d="M0,-30 Q3.5,-3.5 30,0 Q3.5,3.5 0,30 Q-3.5,3.5 -30,0 Q-3.5,-3.5 0,-30 Z" fill="#F24A2B"/></g>
+    <circle cx="168" cy="300" r="11" fill="#F24A2B" opacity=".55"/>
+  </g>
+  <text x="440" y="270" font-family="Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="132" letter-spacing="-3" fill="#1F4D38"><tspan font-weight="500">Auto</tspan><tspan font-weight="800" fill="#F24A2B">Bot</tspan></text>
+  <text x="446" y="332" font-family="Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="38" font-weight="500" fill="#4F6B58">Balas WA Otomatis pakai AI</text>
+</svg>
