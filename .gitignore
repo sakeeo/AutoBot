@@ -14,3 +14,4 @@ promo/
 deploy/secrets/
 deploy/.env
 apps/web/cli-dist/
+graphify-out/
