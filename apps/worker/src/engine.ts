@@ -20,7 +20,7 @@ import { CatalogStore, parseCatalog } from './catalog/catalog-store'
 import { ConversationAgent } from './pipeline/conversation-agent'
 import type { AiProvider } from './answer/ai-answerer'
 import { makeProvider } from './answer/make-provider'
-import { createBrandHandlers } from './brand-ipc'
+import { createBrandHandlers, SilentGateway } from './brand-ipc'
 import { MessageFeed } from './messages/message-feed'
 import { buildRpc, type RpcHandlers } from './rpc'
 import { InstanceMeta } from './instance-meta'
@@ -134,7 +134,15 @@ export async function createEngine(cfg: EngineConfig): Promise<Engine> {
     const handoff = new HandoffService({ gateway, conv, clock })
     const agent = new ConversationAgent({ store, catalog, conv, handoff, gateway, clock })
     const feed = new MessageFeed(db, clock)
+    // The test chat replays its earlier turns into a throwaway store: nothing is saved and nobody is contacted.
+    const previewAgent = (history: { role: 'user' | 'bot'; text: string }[]): ConversationAgent => {
+      const pconv = new ConversationStore(openDb(':memory:'), clock)
+      for (const t of history) pconv.appendTurn('__preview__', t.role, t.text)
+      const silent = new SilentGateway(gateway)
+      return new ConversationAgent({ store, catalog, conv: pconv, handoff: new HandoffService({ gateway: silent, conv: pconv, clock }), gateway: silent, clock })
+    }
     const pipeline = new ReplyPipeline({
+      previewAgent,
       gateway, store, settings, db,
       ai: currentProvider,
       clock,

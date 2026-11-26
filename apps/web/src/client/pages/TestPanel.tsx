@@ -14,55 +14,40 @@ const FALLBACK_WHY: Record<NonNullable<TestResult['agent']>['fallbackReason'] & 
 const SAMPLES = ['Halo', 'Berapa harganya?', 'Jam buka berapa?', 'Terima kasih']
 const clock = (t: number): string => new Date(t).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
 
-/** What the bot would say, as the separate chat bubbles a customer would see. */
-function botBubbles(res: TestResult): { text: string; muted?: boolean }[] {
-  if (res.agent) {
-    const parts = res.agent.replyParts.filter((p) => p.trim() !== '')
-    return parts.length ? parts.map((text) => ({ text })) : [{ text: 'AI memilih tidak membalas.', muted: true }]
-  }
-  if (res.decision.kind === 'out_of_context')
-    return [{ text: `Di luar konteks (${res.decision.reason}) — bot tidak akan menjawab dari pengetahuan umum.`, muted: true }]
-  return [{ text: res.answer?.text ?? 'Tidak ada jawaban.', muted: !res.answer }]
+/** What the bot would send, as the separate chat bubbles a customer would see (empty: it sends nothing). */
+export function botBubbles(res: TestResult): string[] {
+  if (res.agent) return res.agent.fallback ? [] : res.agent.replyParts.filter((p) => p.trim() !== '')
+  return res.answer?.text ? [res.answer.text] : []
 }
 
+/** The conversation so far, so the next test message is answered as part of the same chat (no second greeting). */
+function historyOf(items: Item[]): { role: 'user' | 'bot'; text: string }[] {
+  return items
+    .map((it) => (it.kind === 'user' ? { role: 'user' as const, text: it.text } : { role: 'bot' as const, text: botBubbles(it.res).join('\n') }))
+    .filter((t) => t.text.trim() !== '')
+    .slice(-40)
+    .map((t) => ({ ...t, text: t.text.slice(0, 4000) }))
+}
+
+/** Only what the customer would see on WhatsApp: the reply bubbles. No intent, source or score. */
 function BotTurn({ item }: { item: Extract<Item, { kind: 'bot' }> }) {
   const { res } = item
-  const hits = res.decision.kind === 'answerable' ? res.decision.hits : []
   const bubbles = botBubbles(res)
   return (
     <div className="tchat-row tchat-row-bot">
       <div className="tchat-col">
         {res.agent?.fallback && (
           <div className="tchat-note tchat-note-warn" role="alert">
-            {`${FALLBACK_WHY[res.agent.fallbackReason ?? 'unusable']} Sudah dicoba ${res.agent.attempts ?? 1} kali, jadi percakapan diserahkan ke admin.`}
+            {`${FALLBACK_WHY[res.agent.fallbackReason ?? 'unusable']} Pelanggan tidak menerima balasan; chat diserahkan ke admin.`}
           </div>
         )}
-        {bubbles.map((b, i) => (
-          <div key={i} className={`tchat-bubble tchat-bubble-bot${b.muted ? ' is-muted' : ''}`}>
-            <div className="tchat-text">{b.text}</div>
+        {bubbles.length === 0 && !res.agent?.fallback && <div className="tchat-silent">Bot tidak membalas pesan ini.</div>}
+        {bubbles.map((text, i) => (
+          <div key={i} className="tchat-bubble tchat-bubble-bot">
+            <div className="tchat-text">{text}</div>
             {i === bubbles.length - 1 && <time className="tchat-time">{clock(item.at)}</time>}
           </div>
         ))}
-        <div className="tchat-meta">
-          {res.agent && <span className="tchat-chip">{`intent: ${res.agent.intent}`}</span>}
-          <span className="tchat-chip">{res.via === 'ai' ? 'AI' : res.via === 'extractive' ? 'dokumen' : 'tanpa jawaban'}</span>
-          {res.agent && res.decision.kind === 'out_of_context' && (
-            <span className="tchat-hint">Di luar isi dokumen: bot menjawab "tidak tahu", bukan dari pengetahuan umum.</span>
-          )}
-        </div>
-        {hits.length > 0 && (
-          <details className="tchat-details">
-            <summary>{`Potongan dokumen terambil (${hits.length})`}</summary>
-            <ul className="list-unstyled mb-0">
-              {hits.map((h) => (
-                <li key={h.chunkId} className="tchat-hit">
-                  <div className="small text-body-secondary">{h.file.split(/[\\/]/).pop()} · skor {h.coverage.toFixed(2)}</div>
-                  <div style={{ whiteSpace: 'pre-wrap' }}>{h.text}</div>
-                </li>
-              ))}
-            </ul>
-          </details>
-        )}
       </div>
     </div>
   )
@@ -84,9 +69,10 @@ export function TestPanel() {
     setQ('')
     setErr(null)
     setBusy(true)
+    const history = historyOf(items)
     setItems((l) => [...l, { id: nextId.current++, kind: 'user', text: t, at: Date.now() }])
     try {
-      const res = await window.api.testQuestion(t)
+      const res = await window.api.testQuestion(t, history)
       setItems((l) => [...l, { id: nextId.current++, kind: 'bot', res, at: Date.now() }])
     } catch (e) {
       setErr((e as Error).message)
@@ -146,7 +132,7 @@ export function TestPanel() {
           </button>
         </form>
       </section>
-      <p className="tchat-foot">Enter untuk mengirim, Shift+Enter untuk baris baru. Tiap pesan diuji terpisah, tanpa ingatan percakapan sebelumnya.</p>
+      <p className="tchat-foot">Enter untuk mengirim, Shift+Enter untuk baris baru. Bot mengingat percakapan di layar ini sampai Anda menekan Bersihkan chat.</p>
     </div>
   )
 }

@@ -36,6 +36,12 @@ Berhenti: `npm run docker:down` (data tetap di volume).
 Wizard setup: token setup → nomor pemilik (harus **berbeda** dari nomor bot) → pindai QR nomor bot → kode OTP WhatsApp ke nomor pemilik → username dan password → authenticator (TOTP) dan 10 kode pemulihan.
 Nomor WhatsApp dimasukkan sendiri di formulir; jangan ditulis di berkas, commit, atau chat.
 
+## Lupa username atau authenticator
+
+Lupa password cukup lewat "Lupa password?" di halaman login. Untuk lupa username, atau authenticator dan kode pemulihan hilang:
+`npm run reset-account` (lokal, hentikan `npm run dev` dulu) atau `npm run docker:reset-account` (Docker).
+Hanya akun yang dihapus; sesi WhatsApp, pengetahuan, dan pengaturan tetap. Lalu jalankan wizard setup lagi dengan token baru.
+
 ## Tes
 
 ```bash

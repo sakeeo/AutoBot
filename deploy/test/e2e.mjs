@@ -38,7 +38,7 @@ function totp(secret, s = step()) {
   const h = createHmac('sha1', base32(secret)).update(b).digest(); const o = h[19] & 15
   return String(((h.readUInt32BE(o) & 0x7fffffff) % 1_000_000)).padStart(6, '0')
 }
-const compose = (args) => execSync(`docker compose -f docker-compose.yml -f test/docker-compose.e2e.yml ${args}`, { encoding: 'utf8', cwd: fileURLToPath(new URL('..', import.meta.url)) })
+const compose = (args) => execSync(`docker compose ${args}`, { encoding: 'utf8', cwd: fileURLToPath(new URL('..', import.meta.url)) })
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 // --- pages and headers (production build) --------------------------------------------------------------------------

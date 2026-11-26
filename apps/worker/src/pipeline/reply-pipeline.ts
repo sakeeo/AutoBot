@@ -35,6 +35,8 @@ export interface PipelineDeps {
   conv: ConversationStore
   brand: () => BrandProfile
   agent: ConversationAgent
+  /** A throwaway agent that already knows the given turns (in-memory store, silent gateway): for the test chat. */
+  previewAgent?: (history: { role: 'user' | 'bot'; text: string }[]) => ConversationAgent
   /** Records and announces every message; optional so older wiring and tests keep working. */
   feed?: MessageFeed
   /** Whether the owner has switched the bot on. Absent means always on (older wiring and tests). */
@@ -218,7 +220,7 @@ export class ReplyPipeline extends EventEmitter {
   }
 
   /** Dry run for the "Uji Jawaban" panel: same retrieval, gate and answerer, but nothing is sent or logged. */
-  async preview(text: string): Promise<{
+  async preview(text: string, history: { role: 'user' | 'bot'; text: string }[] = []): Promise<{
     decision: Decision
     answer: Answer | null
     via: 'extractive' | 'ai' | null
@@ -227,7 +229,8 @@ export class ReplyPipeline extends EventEmitter {
     const s = this.d.settings.get()
     const provider = s.mode === 'ai' ? this.d.ai() : null
     if (provider) {
-      const agent = await this.d.agent.handleTurn({
+      const runner = history.length && this.d.previewAgent ? this.d.previewAgent(history) : this.d.agent
+      const agent = await runner.handleTurn({
         chatId: '__preview__', text, profile: this.d.brand(), provider, cfg: s.ai, dryRun: true, memory: s.memoryEnabled
       })
       // The AI decides by intent, not by retrieval: a greeting or thanks needs no document and is still answered.

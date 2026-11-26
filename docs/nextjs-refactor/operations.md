@@ -61,7 +61,14 @@ bash deploy/scripts/restore.sh /jalur/autobot-<cap-waktu>.tar          # atau .t
 ```
 Diuji pada data kosong. **Belum diuji** pada data berisi dan di mesin bersih. Tidak ada migrasi mundur: cadangan dipulihkan ke versi yang sama atau lebih baru.
 
-**Reset** (menghapus SEMUA data; rahasia tetap; meminta ketik `hapus semua`):
+**Reset akun saja** (lupa username, ganti username, atau authenticator dan kode pemulihan hilang semua). Menghapus akun pemilik: username, password, authenticator, kode pemulihan, semua sesi. Sesi WhatsApp, pengetahuan, pengaturan, dan percakapan **tetap**. Audit log disimpan dan mencatat `account_reset`. Meminta ketik `reset akun`:
+```bash
+npm run docker:reset-account      # Docker: menghapus akun lalu memulai ulang web; ambil token setup baru dari log
+npm run reset-account             # lokal: hentikan "npm run dev" dulu, lalu jalankan lagi; token tercetak di terminal
+```
+Setelah itu jalankan wizard setup lagi (nomor pemilik diverifikasi ulang lewat OTP). Langkah QR terlewati bila WhatsApp masih terhubung.
+
+**Reset total** (menghapus SEMUA data; rahasia tetap; meminta ketik `hapus semua`):
 ```bash
 bash deploy/scripts/reset.sh
 ```
@@ -74,6 +81,7 @@ bash deploy/scripts/reset.sh
 |---|---|
 | `port is already allocated` / `address already in use` di 3000 | Ada proses lain (mis. `npm run dev`). Hentikan, atau `CADDY_HTTP_PORT=3100 npm run docker:up`. |
 | Token setup tidak terlihat | Tergulung di log: `npm run docker:logs`, atau mulai ulang `web`. Token baru dibuat tiap mulai. Bila setup sudah selesai, token tidak ada lagi. |
+| Lupa username, atau authenticator dan kode pemulihan hilang | `npm run docker:reset-account` (Docker) atau `npm run reset-account` (lokal). Hanya akun yang dihapus; data bot tetap. |
 | Ulang setup dari nol | `bash deploy/scripts/reset.sh` (Docker) atau hapus `.local-data/` (lokal). Semua data hilang. |
 | Web gagal mulai: `WORKER_TOKEN minimal 32 karakter` atau `AUTH_SECRET_KEY harus 32 byte` | Berkas rahasia rusak atau terlalu pendek. Periksa `deploy/secrets/`. Jangan buat ulang `engine_secret_key` bila API key sudah tersimpan. |
 | Web gagal mulai: `APP_URL harus https://` | `http://` hanya untuk `localhost`. Pakai domain dengan HTTPS. |

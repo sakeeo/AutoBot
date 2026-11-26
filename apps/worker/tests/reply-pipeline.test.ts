@@ -510,6 +510,27 @@ describe('ReplyPipeline ai mode (conversation agent)', () => {
     expect((t.db.prepare('SELECT COUNT(*) c FROM message_log').get() as { c: number }).c).toBe(0)
     expect((t.db.prepare('SELECT COUNT(*) c FROM handoffs').get() as { c: number }).c).toBe(0)
   })
+  it('previews the next message of a test chat with its earlier turns, and still stores nothing', async () => {
+    const p = scripted([agentOut({ intent: 'sapaan', reply_parts: ['Website untuk usaha apa Kak?'], sources: [] })])
+    const t = setup({ ai: p.provider })
+    t.settings.update({ mode: 'ai' })
+    const previewAgent = (history: { role: 'user' | 'bot'; text: string }[]) => {
+      const conv = new ConversationStore(openDb(':memory:'), t.clock)
+      for (const h of history) conv.appendTurn('__preview__', h.role, h.text)
+      return new ConversationAgent({ store: t.store, catalog: new CatalogStore(t.db), conv, handoff: new HandoffService({ gateway: t.gateway, conv, clock: t.clock }), gateway: t.gateway, clock: t.clock, retryDelaysMs: [0, 0] })
+    }
+    const pipeline = t.make(t.db, { previewAgent })
+    const r = await pipeline.preview('mau konsultasi website', [
+      { role: 'user', text: 'hi kak' },
+      { role: 'bot', text: 'Halo Kak, saya asisten otomatis. Ada yang bisa dibantu?' }
+    ])
+    expect(r.agent?.replyParts).toEqual(['Website untuk usaha apa Kak?'])
+    const prompt = p.calls[0].system + p.calls[0].user
+    expect(prompt).toContain('hi kak')
+    expect(prompt).toContain('saya asisten otomatis')
+    expect(t.gateway.sent).toEqual([])
+    expect((t.db.prepare('SELECT COUNT(*) c FROM turns').get() as { c: number }).c).toBe(0)
+  })
 })
 
 describe('ReplyPipeline.preview', () => {

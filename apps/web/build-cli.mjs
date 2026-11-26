@@ -1,4 +1,4 @@
-// Bundles the maintenance CLI (backup) into one file. better-sqlite3 stays external: the image already carries it.
+// Bundles the maintenance CLI (backup, reset-account) into one file. better-sqlite3 stays external: the image already carries it.
 import { build } from 'esbuild'
 
 await build({

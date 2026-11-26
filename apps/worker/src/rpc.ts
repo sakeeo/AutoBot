@@ -12,7 +12,7 @@ import type { AiProvider } from './answer/ai-answerer'
 import type { WaGateway } from './wa/gateway'
 import type { ConnStatus, Settings } from '@autobot/contracts/types'
 import { CHANNELS as C } from '@autobot/contracts/channels'
-import { ApiKeySchema, BulkHandlingSchema, ChatIdSchema, LimitSchema, MemoryPatchSchema, QuestionSchema, SettingsPatchSchema, type LogRow } from '@autobot/contracts/ipc'
+import { ApiKeySchema, BulkHandlingSchema, ChatIdSchema, LimitSchema, MemoryPatchSchema, QuestionSchema, SettingsPatchSchema, TestHistorySchema, type LogRow } from '@autobot/contracts/ipc'
 import { buildDashboard } from './stats'
 import { listModels, saveApiKey } from './ai-key'
 import type { BrandHandlers } from './brand-ipc'
@@ -84,7 +84,7 @@ export function buildRpc(d: RpcDeps): RpcHandlers {
     return { ok: true }
   })
 
-  handle(C.testQuestion, (q: unknown) => d.pipeline.preview(QuestionSchema.parse(q)))
+  handle(C.testQuestion, (q: unknown, history?: unknown) => d.pipeline.preview(QuestionSchema.parse(q), TestHistorySchema.parse(history ?? [])))
 
   handle(C.saveApiKey, (key: unknown) => {
     const parsed = ApiKeySchema.safeParse(key)

@@ -12,7 +12,7 @@ const aiResult = (parts: string[], intent = 'sapaan') => ({
 })
 
 describe('Uji Jawaban as a chat', () => {
-  it('shows the question as a bubble and each AI reply part as its own bubble, with the intent', async () => {
+  it('shows the question as a bubble and each AI reply part as its own bubble, and nothing else', async () => {
     const testQuestion = vi.fn().mockResolvedValue(aiResult(['Halo Kak!', 'Ada yang bisa kami bantu?']))
     ;(window as any).api = { testQuestion }
     render(<TestPanel />)
@@ -21,8 +21,9 @@ describe('Uji Jawaban as a chat', () => {
     expect(await screen.findByText('Halo Kak!')).toBeTruthy()
     expect(screen.getByText('Ada yang bisa kami bantu?')).toBeTruthy()
     expect(screen.getByText('hslo ksk')).toBeTruthy()
-    expect(screen.getByText('intent: sapaan')).toBeTruthy()
-    expect(testQuestion).toHaveBeenCalledWith('hslo ksk')
+    expect(screen.queryByText(/intent/i)).toBeNull()
+    expect(screen.queryByText(/^AI$/)).toBeNull()
+    expect(testQuestion).toHaveBeenCalledWith('hslo ksk', [])
     expect((screen.getByLabelText(/pertanyaan/i) as HTMLTextAreaElement).value).toBe('')
   })
   it('Shift+Enter does not send; a sample chip sends; the thread keeps growing and can be cleared', async () => {
@@ -34,22 +35,29 @@ describe('Uji Jawaban as a chat', () => {
     fireEvent.keyDown(box, { key: 'Enter', shiftKey: true })
     expect(testQuestion).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Halo' }))
-    await waitFor(() => expect(testQuestion).toHaveBeenCalledWith('Halo'))
+    await waitFor(() => expect(testQuestion).toHaveBeenCalledWith('Halo', []))
     await screen.findByText('Hai!')
     fireEvent.click(screen.getByRole('button', { name: /bersihkan chat/i }))
     expect(screen.queryByText('Hai!')).toBeNull()
   })
 
-  it('shows only the file name of a retrieved document, for Windows and Linux paths alike', async () => {
-    const hit = (file: string) => ({ chunkId: 1, file, text: 'Harga kopi Rp25.000', coverage: 1, rank: -1 })
-    for (const file of ['C:\\Users\\x\\docs\\faq.md', '/home/x/docs/faq.md']) {
-      cleanup()
-      ;(window as any).api = { testQuestion: vi.fn().mockResolvedValue({
-        decision: { kind: 'answerable', hits: [hit(file)] }, answer: { text: 'Rp25.000', sources: [] }, via: 'extractive' }) }
-      render(<TestPanel />)
-      fireEvent.change(screen.getByLabelText(/pertanyaan/i), { target: { value: 'harga' } })
-      fireEvent.keyDown(screen.getByLabelText(/pertanyaan/i), { key: 'Enter' })
-      expect(await screen.findByText(/^faq\.md · skor 1\.00/)).toBeTruthy()
-    }
+  it('sends the conversation so far with the next message, so the bot does not greet again', async () => {
+    const testQuestion = vi.fn()
+      .mockResolvedValueOnce(aiResult(['Halo Kak, saya asisten otomatis.', 'Ada yang bisa dibantu?']))
+      .mockResolvedValueOnce(aiResult(['Boleh, website untuk usaha apa?'], 'tanya_produk'))
+    ;(window as any).api = { testQuestion }
+    render(<TestPanel />)
+    const box = screen.getByLabelText(/pertanyaan/i)
+    fireEvent.change(box, { target: { value: 'hi kak' } }); fireEvent.keyDown(box, { key: 'Enter' })
+    await screen.findByText('Ada yang bisa dibantu?')
+    fireEvent.change(box, { target: { value: 'mau konsultasi website' } }); fireEvent.keyDown(box, { key: 'Enter' })
+    await screen.findByText('Boleh, website untuk usaha apa?')
+    expect(testQuestion).toHaveBeenLastCalledWith('mau konsultasi website', [
+      { role: 'user', text: 'hi kak' },
+      { role: 'bot', text: 'Halo Kak, saya asisten otomatis.\nAda yang bisa dibantu?' }
+    ])
+    fireEvent.click(screen.getByRole('button', { name: /bersihkan chat/i }))
+    fireEvent.change(box, { target: { value: 'halo lagi' } }); fireEvent.keyDown(box, { key: 'Enter' })
+    await waitFor(() => expect(testQuestion).toHaveBeenLastCalledWith('halo lagi', []))
   })
 })

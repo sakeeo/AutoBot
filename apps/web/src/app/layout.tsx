@@ -1,6 +1,7 @@
 import { headers } from 'next/headers'
 import type { Metadata, Viewport } from 'next'
 import type { ReactNode } from 'react'
+import Script from 'next/script'
 import 'bootstrap/dist/css/bootstrap.min.css'
 import 'bootstrap-icons/font/bootstrap-icons.css'
 import '@fontsource/inter/400.css'
@@ -27,10 +28,11 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const nonce = (await headers()).get('x-nonce') ?? undefined
   return (
     <html lang="id" data-bs-theme="light" suppressHydrationWarning>
-      <head>
-        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
-      </head>
-      <body>{children}</body>
+      <body>
+        {/* next/script places this before React starts: it runs once, and React never renders a <script> itself */}
+        <Script id="theme-init" strategy="beforeInteractive" nonce={nonce}>{THEME_SCRIPT}</Script>
+        {children}
+      </body>
     </html>
   )
 }

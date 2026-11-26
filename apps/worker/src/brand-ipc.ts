@@ -34,7 +34,7 @@ const tooBig = (x: unknown): boolean => {
 }
 
 /** A gateway that sends nothing: simulations must never reach a real customer or admin. */
-class SilentGateway implements WaGateway {
+export class SilentGateway implements WaGateway {
   constructor(private real: WaGateway) {}
   onMessage(_cb: (m: IncomingMessage) => void): void {}
   onStatus(_cb: (s: ConnStatus) => void): void {}

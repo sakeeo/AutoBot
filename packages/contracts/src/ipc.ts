@@ -48,6 +48,9 @@ export const BulkHandlingSchema = z
   .object({ chatIds: z.array(z.string().min(1).max(200)).min(1).max(500), to: z.enum(['manusia', 'bot']) })
   .strict()
 export const QuestionSchema = z.string().trim().min(1).max(2000)
+/** Earlier turns of a test chat, so the preview answers like the next message of the same conversation. */
+export const TestHistorySchema = z.array(z.object({ role: z.enum(['user', 'bot']), text: z.string().trim().min(1).max(4000) }).strict()).max(40).default([])
+export type TestHistory = z.infer<typeof TestHistorySchema>
 export const LimitSchema = z.number().int().min(1).max(500)
 
 export interface DashboardPeriod { replied: number; refused: number; handoff: number; errors: number; links: number }
@@ -144,7 +147,7 @@ export interface Api {
   /** Deletes an indexed knowledge file (named relative to the knowledge folder) from disk and the index. */
   kbDelete(file: string): Promise<{ ok: boolean }>
   onIndexStatus(cb: (e: IndexStatusEvent) => void): () => void
-  testQuestion(q: string): Promise<TestResult>
+  testQuestion(q: string, history?: { role: 'user' | 'bot'; text: string }[]): Promise<TestResult>
   saveApiKey(key: string): Promise<{ ok: boolean; error?: string; models?: string[] }>
   hasApiKey(): Promise<boolean>
   listModels(): Promise<{ ok: true; models: string[] } | { ok: false; error: string }>

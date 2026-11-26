@@ -104,7 +104,7 @@ describe('KnowledgePage', () => {
 })
 
 describe('TestPanel', () => {
-  it('shows "Di luar konteks" for an out-of-context decision', async () => {
+  it('shows that the bot sends nothing for an out-of-context message, without internal details', async () => {
     setApi({
       testQuestion: vi.fn().mockResolvedValue({
         decision: { kind: 'out_of_context', reason: 'no_hits' },
@@ -115,9 +115,10 @@ describe('TestPanel', () => {
     render(<TestPanel />)
     fireEvent.change(screen.getByLabelText(/pertanyaan/i), { target: { value: 'siapa presiden?' } })
     fireEvent.click(screen.getByRole('button', { name: /uji/i }))
-    expect(await screen.findByText(/di luar konteks/i)).toBeTruthy()
+    expect(await screen.findByText('Bot tidak membalas pesan ini.')).toBeTruthy()
+    expect(screen.queryByText(/no_hits|di luar konteks/i)).toBeNull()
   })
-  it('shows the answer, source and coverage score when answerable', async () => {
+  it('shows the reply as WhatsApp would send it, without scores or retrieved chunks', async () => {
     setApi({
       testQuestion: vi.fn().mockResolvedValue({
         decision: {
@@ -132,7 +133,8 @@ describe('TestPanel', () => {
     fireEvent.change(screen.getByLabelText(/pertanyaan/i), { target: { value: 'harga kopi' } })
     fireEvent.click(screen.getByRole('button', { name: /uji/i }))
     expect((await screen.findAllByText(/Rp25\.000/)).length).toBeGreaterThan(0)
-    expect(screen.getByText(/skor 1\.00/i)).toBeTruthy()
+    expect(screen.queryByText(/skor/i)).toBeNull()
+    expect(screen.queryByText(/potongan dokumen/i)).toBeNull()
   })
 })
 

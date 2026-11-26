@@ -6,7 +6,8 @@ const VALID: Settings['theme'][] = ['light', 'dark', 'auto']
 
 /** The mode actually shown: 'auto' follows the OS preference. */
 export function effectiveTheme(theme: Settings['theme']): 'light' | 'dark' {
-  const prefersDark = !!window.matchMedia?.('(prefers-color-scheme: dark)').matches
+  // On the server there is no window: assume light; the browser corrects it after mounting.
+  const prefersDark = typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-color-scheme: dark)').matches
   return theme === 'dark' || (theme === 'auto' && prefersDark) ? 'dark' : 'light'
 }
 
@@ -34,7 +35,10 @@ export function applyCachedTheme(): void {
 
 /** The mode actually shown, kept current when the OS changes theme while the setting is 'auto'. */
 export function useEffectiveTheme(theme: Settings['theme']): 'light' | 'dark' {
+  // The first render matches the server's (OS preference unknown); the real value follows after mounting, so hydration matches.
+  const [mounted, setMounted] = useState(false)
   const [, tick] = useState(0)
+  useEffect(() => { setMounted(true) }, [])
   useEffect(() => {
     if (theme !== 'auto') return
     const mq = window.matchMedia?.('(prefers-color-scheme: dark)')
@@ -43,5 +47,5 @@ export function useEffectiveTheme(theme: Settings['theme']): 'light' | 'dark' {
     mq.addEventListener('change', on)
     return () => mq.removeEventListener('change', on)
   }, [theme])
-  return effectiveTheme(theme)
+  return mounted ? effectiveTheme(theme) : theme === 'dark' ? 'dark' : 'light'
 }
