@@ -9,16 +9,17 @@
   --color-primary: #1F4D38;
   --color-primary-dark: #163A29;
   --color-primary-light: #E1E5CF;
-  --color-background: #EDE6D6;
-  --color-surface: #F7F3EA;
-  --color-border: #D9CFB8;
-  --color-text-primary: #1C2A22;
+  /* Figma "AutoBot – UI v1" (Intercom principles on the AutoBot identity): cream canvas, white cards, ink text. */
+  --color-background: #F5F1EC;
+  --color-surface: #FFFFFF;
+  --color-border: #D3CEC6;
+  --color-text-primary: #111111;
   --color-text-secondary: #8A8570;
   --color-success: #7FA33A;
   --color-warning: #D9A22E;
   --color-danger: #F24A2B;
-  --radius-control: 6px;
-  --radius-card: 10px;
+  --radius-control: 8px;
+  --radius-card: 12px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -26,10 +27,10 @@
   --space-5: 20px;
   --space-6: 24px;
   --space-8: 32px;
-  --shadow-card: 0 2px 8px rgba(60, 50, 20, 0.08);
+  --shadow-card: none;
 
   /* DERIVED: muted text. The guide's secondary colour is ~3.6:1 on white, below the 4.5:1 that §10 asks for. */
-  --color-text-muted: #5A5F4E;
+  --color-text-muted: #626260;
   /* DERIVED: link/primary text on surfaces (same as primary in the light palette). */
   --color-primary-text: #1F4D38;
   /* DERIVED: soft badge/alert backgrounds and their text, in the hue of each guide status colour. */
@@ -37,11 +38,11 @@
   --color-success-text: #3F5E10;
   --color-warning-soft: #F6E6BF;
   --color-warning-text: #6B4700;
-  --color-danger-soft: #FADCD3;
+  --color-danger-soft: #FDE3DC;
   --color-danger-text: #A12A12;
   --color-info-soft: #E1E5CF;
   --color-info-text: #1F4D38;
-  --color-neutral-soft: #E2DAC6;
+  --color-neutral-soft: #EBE7E1;
   --color-neutral-text: #3F4638;
   /* DERIVED: control border for checkboxes and switches; the guide border (1.1:1) leaves them invisible, WCAG 1.4.11 asks 3:1. */
   --color-control-border: #7B8870;
@@ -52,6 +53,22 @@
   --color-sidebar-muted: #B7CBBB;
   --color-overlay: #101A14;
   --color-on-primary: #FFFFFF;
+  /* Figma: primary buttons are ink; vermilion is kept for the bot's own actions (Aktifkan bot, Tambah sumber). */
+  --color-ink: #111111;
+  --color-ink-hover: #2B2B2B;
+  --color-on-ink: #FFFFFF;
+  /* DERIVED: vermilion darkened just enough for WCAG AA (white text 4.6:1; Figma's #F24A2B gives 3.6:1). */
+  --color-cta: #D9381A;
+  --color-cta-hover: #BF3016;
+  --color-cta-text: #B42D12;
+  --color-on-cta: #FFFFFF;
+  --color-input-bg: #F5F1EC;
+  /* DERIVED: Figma's #D3CEC6 input stroke is 1.6:1 on white; 3:1 (WCAG 1.4.11) keeps fields from looking transparent. */
+  --color-input-border: #8F8A82;
+  --color-sidebar-bg: #1F4D38;
+  --color-topbar-bg: #FFFFFF;
+  --color-bubble-in: #F5F1EC;
+  --color-bubble-out: #DCF3D1;
 
   --font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
 
@@ -69,9 +86,9 @@
   --bs-danger: var(--color-danger);
   --bs-danger-rgb: 242, 74, 43;
   --bs-body-bg: var(--color-background);
-  --bs-body-bg-rgb: 237, 230, 214;
+  --bs-body-bg-rgb: 245, 241, 236;
   --bs-body-color: var(--color-text-primary);
-  --bs-body-color-rgb: 28, 42, 34;
+  --bs-body-color-rgb: 17, 17, 17;
   --bs-emphasis-color: var(--color-text-primary);
   --bs-secondary-color: var(--color-text-muted);
   --bs-secondary-bg: var(--color-neutral-soft);
@@ -110,7 +127,18 @@
   --color-control-border: #8C9C88;
   --color-sidebar-active: #2E6A4F;
   --color-sidebar-hover: #26583F;
-  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --color-sidebar-bg: #0F2A1E;
+  --color-topbar-bg: #1D241F;
+  --color-ink: #2E6A4F;
+  --color-ink-hover: #367B5C;
+  --color-on-ink: #FFFFFF;
+  /* inputs: same surface as the card but a clearly visible 3:1 border, so they never look transparent */
+  --color-input-bg: #141714;
+  --color-cta-text: #FF9A82;
+  --color-input-border: #8C9C88;
+  --color-bubble-in: #2A332C;
+  --color-bubble-out: #1F4A35;
+  --shadow-card: none;
   --bs-body-bg-rgb: 20, 23, 20;
   --bs-body-color-rgb: 237, 230, 214;
   --bs-link-color-rgb: 127, 208, 160;
@@ -125,8 +153,8 @@ body {
   background: var(--color-background);
   color: var(--color-text-primary);
 }
-h1, .h1 { font-size: 1.5rem; font-weight: 700; }
-h2, .h2 { font-size: 1.375rem; font-weight: 700; }
+h1, .h1 { font-size: 1.75rem; font-weight: 600; letter-spacing: -0.01em; }
+h2, .h2 { font-size: 1.375rem; font-weight: 600; letter-spacing: -0.01em; }
 h3, .h3 { font-size: 1.125rem; font-weight: 600; }
 h4, .h4 { font-size: 1.125rem; font-weight: 600; }
 h5, .h5 { font-size: 1rem; font-weight: 600; }
@@ -151,7 +179,7 @@ code { color: var(--color-primary-text); font-size: 0.8125rem; }
 /* Bootstrap draws its own blue focus ring; replace every one with the token outline (§9, §10). */
 .form-control:focus, .form-select:focus {
   outline: 2px solid var(--color-primary-text); outline-offset: 0; box-shadow: none;
-  background-color: var(--color-surface); color: var(--color-text-primary); border-color: var(--color-primary-text);
+  background-color: var(--color-input-bg); color: var(--color-text-primary); border-color: var(--color-primary-text);
 }
 .btn:focus-visible, .nav-link:focus-visible, .btn-close:focus-visible, .form-check-input:focus {
   outline: 2px solid var(--color-primary-text); outline-offset: 2px; box-shadow: none;
@@ -177,22 +205,31 @@ code { color: var(--color-primary-text); font-size: 0.8125rem; }
   --bs-btn-font-size: 0.8125rem;
   --bs-btn-font-weight: 500;
   --bs-btn-border-radius: var(--radius-control);
-  --bs-btn-padding-y: 0.4375rem;
+  --bs-btn-padding-y: 0.5rem;
   --bs-btn-padding-x: var(--space-4);
-  min-height: 36px;
+  --bs-btn-font-weight: 600;
+  min-height: 40px;
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-1);
 }
 .btn-sm { --bs-btn-padding-y: 0.25rem; --bs-btn-padding-x: var(--space-3); --bs-btn-font-size: 0.75rem; min-height: 32px; }
 .btn-primary {
-  --bs-btn-bg: var(--color-primary); --bs-btn-border-color: var(--color-primary); --bs-btn-color: var(--color-on-primary);
-  --bs-btn-hover-bg: var(--color-primary-dark); --bs-btn-hover-border-color: var(--color-primary-dark); --bs-btn-hover-color: var(--color-on-primary);
-  --bs-btn-active-bg: var(--color-primary-dark); --bs-btn-active-border-color: var(--color-primary-dark); --bs-btn-active-color: var(--color-on-primary);
-  --bs-btn-disabled-bg: var(--color-primary); --bs-btn-disabled-border-color: var(--color-primary); --bs-btn-disabled-color: var(--color-on-primary);
-  --bs-btn-focus-shadow-rgb: 31, 77, 56;
+  --bs-btn-bg: var(--color-ink); --bs-btn-border-color: var(--color-ink); --bs-btn-color: var(--color-on-ink);
+  --bs-btn-hover-bg: var(--color-ink-hover); --bs-btn-hover-border-color: var(--color-ink-hover); --bs-btn-hover-color: var(--color-on-ink);
+  --bs-btn-active-bg: var(--color-ink-hover); --bs-btn-active-border-color: var(--color-ink-hover); --bs-btn-active-color: var(--color-on-ink);
+  --bs-btn-disabled-bg: var(--color-ink); --bs-btn-disabled-border-color: var(--color-ink); --bs-btn-disabled-color: var(--color-on-ink);
+  --bs-btn-focus-shadow-rgb: 17, 17, 17;
+}
+/* The bot's own call to action (Aktifkan bot, Tambah Google Sheet): vermilion, used sparingly. */
+.btn-cta {
+  --bs-btn-bg: var(--color-cta); --bs-btn-border-color: var(--color-cta); --bs-btn-color: var(--color-on-cta);
+  --bs-btn-hover-bg: var(--color-cta-hover); --bs-btn-hover-border-color: var(--color-cta-hover); --bs-btn-hover-color: var(--color-on-cta);
+  --bs-btn-active-bg: var(--color-cta-hover); --bs-btn-active-border-color: var(--color-cta-hover); --bs-btn-active-color: var(--color-on-cta);
+  --bs-btn-disabled-bg: var(--color-cta); --bs-btn-disabled-border-color: var(--color-cta); --bs-btn-disabled-color: var(--color-on-cta);
 }
 .btn-outline-secondary, .btn-outline-primary, .btn-light {
-  --bs-btn-bg: var(--color-surface); --bs-btn-color: var(--color-text-primary); --bs-btn-border-color: var(--color-border);
-  --bs-btn-hover-bg: var(--color-primary-light); --bs-btn-hover-color: var(--color-primary-text); --bs-btn-hover-border-color: var(--color-border);
-  --bs-btn-active-bg: var(--color-primary-light); --bs-btn-active-color: var(--color-primary-text); --bs-btn-active-border-color: var(--color-border);
+  --bs-btn-bg: var(--color-surface); --bs-btn-color: var(--color-text-primary); --bs-btn-border-color: var(--color-text-primary);
+  --bs-btn-hover-bg: var(--color-neutral-soft); --bs-btn-hover-color: var(--color-text-primary); --bs-btn-hover-border-color: var(--color-text-primary);
+  --bs-btn-active-bg: var(--color-neutral-soft); --bs-btn-active-color: var(--color-text-primary); --bs-btn-active-border-color: var(--color-text-primary);
   --bs-btn-disabled-bg: var(--color-surface); --bs-btn-disabled-color: var(--color-text-muted); --bs-btn-disabled-border-color: var(--color-border);
 }
 .btn-outline-danger, .btn-danger {
@@ -210,12 +247,18 @@ code { color: var(--color-primary-text); font-size: 0.8125rem; }
 
 /* Inputs & filters (§7) */
 .form-control, .form-select {
-  background-color: var(--color-surface);
+  background-color: var(--color-input-bg);
   color: var(--color-text-primary);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-input-border);
   border-radius: var(--radius-control);
-  min-height: 36px;
-  font-size: 0.8125rem;
+  min-height: 40px;
+  font-size: 0.875rem;
+}
+/* Browser autofill paints its own (often pale) background: keep the token colours. */
+.form-control:-webkit-autofill, .form-control:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--color-text-primary);
+  box-shadow: 0 0 0 1000px var(--color-input-bg) inset;
+  caret-color: var(--color-text-primary);
 }
 textarea.form-control { min-height: 72px; }
 .form-control::placeholder { color: var(--color-text-muted); opacity: 1; }
@@ -268,7 +311,7 @@ textarea.form-control { min-height: 72px; }
  * and a loud vermilion the 10% that draws the eye (big numbers' end, errors, glow). Scoped by .dash in ui.css.
  */
 :root {
-  --dash-cream: #EDE6D6;
+  --dash-cream: #F5F1EC;
   --dash-green: #1F4D38;
   --dash-loud: #F24A2B;
   --dash-ink: #1C2A22;
@@ -278,12 +321,12 @@ textarea.form-control { min-height: 72px; }
   --dash-amber: #C98A1B;
   --dash-glow: transparent;
   --dash-card-bg: var(--color-surface);
-  --dash-card-border: #DDD3BD;
-  --dash-card-shadow: 0 2px 8px rgba(60, 50, 20, 0.08);
-  --dash-card-shadow-hover: 0 6px 18px rgba(60, 50, 20, 0.14);
+  --dash-card-border: var(--color-border);
+  --dash-card-shadow: none;
+  --dash-card-shadow-hover: none;
   --dash-blur: none;
-  --dash-wash-a: rgba(31, 77, 56, 0.10);
-  --dash-wash-b: rgba(242, 74, 43, 0.08);
+  --dash-wash-a: transparent;
+  --dash-wash-b: transparent;
   --dash-grid: transparent;
   --dash-page: var(--color-background);
 }
@@ -292,14 +335,15 @@ textarea.form-control { min-height: 72px; }
   --dash-accent: #FF6340;
   --dash-neutral: #EDE6D6;
   --dash-amber: #F2B84B;
-  --dash-glow: rgba(242, 74, 43, 0.28);
-  --dash-card-bg: linear-gradient(160deg, rgba(31, 77, 56, 0.55), rgba(22, 30, 26, 0.85));
-  --dash-card-border: rgba(237, 230, 214, 0.14);
-  --dash-card-shadow: 0 0 0 1px rgba(237, 230, 214, 0.03), 0 8px 28px rgba(0, 0, 0, 0.45);
-  --dash-card-shadow-hover: 0 0 22px rgba(242, 74, 43, 0.28), 0 8px 28px rgba(0, 0, 0, 0.5);
-  --dash-blur: blur(10px);
-  --dash-wash-a: rgba(31, 77, 56, 0.35);
-  --dash-wash-b: rgba(242, 74, 43, 0.14);
-  --dash-grid: rgba(237, 230, 214, 0.05);
+  /* Figma: flat cards, no glow, blur, grid or gradient */
+  --dash-glow: transparent;
+  --dash-card-bg: var(--color-surface);
+  --dash-card-border: var(--color-border);
+  --dash-card-shadow: none;
+  --dash-card-shadow-hover: none;
+  --dash-blur: none;
+  --dash-wash-a: transparent;
+  --dash-wash-b: transparent;
+  --dash-grid: transparent;
   --dash-page: #141714;
 }

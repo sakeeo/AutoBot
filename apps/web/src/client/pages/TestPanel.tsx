@@ -11,6 +11,8 @@ const FALLBACK_WHY: Record<NonNullable<TestResult['agent']>['fallbackReason'] & 
   network: 'Tidak bisa terhubung ke penyedia AI. Periksa koneksi internet.',
   unusable: 'AI membalas dengan format yang tidak bisa dipakai (sering karena "Maks token jawaban" terlalu kecil atau model kurang cocok). Naikkan batas token atau ganti model di menu AI.'
 }
+/** Set once the owner has tried the bot here; the dashboard's "Mulai cepat" list ticks it off. */
+export const TESTED_KEY = 'autobot-tested'
 const SAMPLES = ['Halo', 'Berapa harganya?', 'Jam buka berapa?', 'Terima kasih']
 const clock = (t: number): string => new Date(t).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
 
@@ -73,7 +75,9 @@ export function TestPanel() {
     setItems((l) => [...l, { id: nextId.current++, kind: 'user', text: t, at: Date.now() }])
     try {
       const res = await window.api.testQuestion(t, history)
+      if (!res) throw new Error('Server tidak memberi jawaban. Coba lagi.')
       setItems((l) => [...l, { id: nextId.current++, kind: 'bot', res, at: Date.now() }])
+      try { localStorage.setItem(TESTED_KEY, '1') } catch { /* remembering is a convenience only */ }
     } catch (e) {
       setErr((e as Error).message)
     } finally {
@@ -87,13 +91,15 @@ export function TestPanel() {
 
   return (
     <div>
-      <PageHeader icon="bi-chat-dots" title="Uji Jawaban" subtitle="Coba pertanyaan di sini tanpa mengirim apa pun ke WhatsApp."
-        actions={items.length > 0 && !busy
-          ? <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => { setItems([]); setErr(null) }}>
-              <i className="bi bi-trash me-1" aria-hidden="true" />Bersihkan chat
-            </button>
-          : undefined} />
+      <PageHeader title="Uji Jawaban" subtitle="Coba sebagai pelanggan. Tidak dikirim ke WhatsApp." />
       <section className="tchat" aria-label="Simulasi chat">
+        <header className="tchat-head">
+          <span className="chat-avatar" aria-hidden="true" />
+          <strong>Pelanggan (uji)</strong>
+          {items.length > 0 && !busy && (
+            <button type="button" className="btn btn-sm tchat-clear" onClick={() => { setItems([]); setErr(null) }}>Bersihkan chat</button>
+          )}
+        </header>
         <div className="tchat-thread" aria-live="polite">
           {items.length === 0 && !busy && (
             <div className="tchat-empty">

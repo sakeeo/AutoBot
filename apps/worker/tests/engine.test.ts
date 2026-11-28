@@ -152,3 +152,17 @@ describe('createEngine', () => {
     expect(() => engine.rpc.eraseCustomer('status@broadcast')).toThrow()
   })
 })
+
+describe('chat info for the Pesan page', () => {
+  it('tells why a chat was handed over, with the lead and stage, and forgets the reason once taken over', async () => {
+    const { engine } = await boot()
+    const db = engine.internals.db
+    const id = '6281@s.whatsapp.net'
+    db.prepare("INSERT INTO contacts(chat_id, status, stage, lead_json) VALUES (?, 'menunggu_admin', 'penawaran', '{\"kebutuhan\":\"landing page\"}')").run(id)
+    db.prepare("INSERT INTO handoffs(chat_id, reason, status, created_at) VALUES (?, 'minta nego harga', 'open', 1)").run(id)
+    expect(await engine.rpc.getChatInfo(id)).toMatchObject({ handling: 'menunggu_admin', handoffReason: 'minta nego harga', stage: 'penawaran', lead: { kebutuhan: 'landing page' }, product: null })
+    await engine.rpc.takeOverChat(id)
+    expect(await engine.rpc.getChatInfo(id)).toMatchObject({ handling: 'manusia', handoffReason: null })
+    expect(() => engine.rpc.getChatInfo('')).toThrow()
+  })
+})

@@ -14,7 +14,7 @@ const ctx = (over: Partial<AgentContext> = {}): AgentContext => ({
   profile: profile(), message: 'berapa harga kopi susu?',
   hits: [{ chunkId: 1, file: '/k/menu.md', text: 'Kopi susu Rp25.000', coverage: 1, rank: -1 }],
   products: [{ id: 'kopi-susu', name: 'Kopi Susu', price: 25000, description: 'kopi susu gula aren', checkoutUrl: 'https://x.example/k', suitableFor: '', stock: '' }],
-  lead: {}, stage: 'sapa', history: [], withinHours: true, botNumber: '6285119308345', ...over
+  lead: {}, stage: 'sapa', history: [], withinHours: true, botNumber: '6281200009999', ...over
 })
 const cfg = { model: 'm', maxTokens: 300 }
 const fake = (out: string | Error): AiProvider => ({

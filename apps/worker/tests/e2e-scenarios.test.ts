@@ -18,11 +18,11 @@ import type { ConnStatus, IncomingMessage } from '@autobot/contracts/types'
 import { PRESETS, type BrandProfile } from '@autobot/contracts/brand'
 
 const KB = join(__dirname, '..', '..', '..', 'knowledge', 'kerabat-koding')
-const BOT = '6285119308345'
+const BOT = '6281200009999'
 const CUSTOMER = '6281999000111@s.whatsapp.net'
 const ADMIN_JID = '6281234567890@s.whatsapp.net'
 const HOUR = 3_600_000
-const FORBIDDEN = /0851|8345|6285119308345|lewat whatsapp/i
+const FORBIDDEN = /0851|8345|6281200009999|lewat whatsapp/i
 
 class FakeGateway implements WaGateway {
   sent: { chatId: string; text: string }[] = []
@@ -164,9 +164,9 @@ describe('end to end: messy customer input', () => {
 describe('end to end: the bot never sends the customer to its own number', () => {
   const adversarial = [
     out({ intent: 'tanya_harga', reply_parts: [
-      'Paket Website UMKM Rp1,5 juta per tahun.', 'Silakan hubungi kami lewat WhatsApp 0851-1930-8345 ya Kak.'] }),
-    out({ intent: 'tanya_produk', reply_parts: ['Bisa Kak. Konsultasi gratis lewat WhatsApp.', 'Atau chat ke wa.me/6285119308345'] }),
-    out({ intent: 'tanya_produk', reply_parts: ['Boleh Kak, untuk detail lain tanyakan lewat WhatsApp ke nomor +62 851 1930 8345.'] })
+      'Paket Website UMKM Rp1,5 juta per tahun.', 'Silakan hubungi kami lewat WhatsApp 0812-0000-9999 ya Kak.'] }),
+    out({ intent: 'tanya_produk', reply_parts: ['Bisa Kak. Konsultasi gratis lewat WhatsApp.', 'Atau chat ke wa.me/6281200009999'] }),
+    out({ intent: 'tanya_produk', reply_parts: ['Boleh Kak, untuk detail lain tanyakan lewat WhatsApp ke nomor +62 812 0000 9999.'] })
   ]
   it('filters numbers and "contact us on WhatsApp" calls to action from every reply', async () => {
     const t = await setup('produk', adversarial)

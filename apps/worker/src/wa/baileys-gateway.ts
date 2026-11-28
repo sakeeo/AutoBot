@@ -77,7 +77,7 @@ export function shouldHandleUpsert(type: string, fromMe = false): boolean {
   return type === 'notify' || (type === 'append' && fromMe)
 }
 
-/** "6285119308345:12@s.whatsapp.net" -> "6285119308345". */
+/** "6281200009999:12@s.whatsapp.net" -> "6281200009999". */
 export function selfNumberFromJid(jid: string | null | undefined): string | null {
   if (!jid) return null
   const digits = jid.split('@')[0].split(':')[0].replace(/\D/g, '')

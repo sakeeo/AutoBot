@@ -4,7 +4,7 @@ import { BrandStore } from '../src/brand-store'
 import { PRESETS, type BrandProfile } from '@autobot/contracts/brand'
 
 const clock = { t: 1_700_000_000_000, now() { return this.t } }
-const make = (botNumber: string | null = '6285119308345') =>
+const make = (botNumber: string | null = '6281200009999') =>
   new BrandStore(openDb(':memory:'), clock, () => ({ botNumber, productCount: 0 }))
 const profile = (over: Partial<BrandProfile> = {}): BrandProfile => ({
   ...structuredClone(PRESETS.kustom), identity: { ...PRESETS.kustom.identity, businessName: 'Toko Uji' }, ...over
@@ -28,7 +28,7 @@ describe('BrandStore', () => {
   })
   it('refuses to apply when validation finds errors and keeps the active version', () => {
     const s = make()
-    const bad = profile({ admins: [{ id: 'a', name: 'Bot', number: '0851-1930-8345', notifyWhatsapp: true }] })
+    const bad = profile({ admins: [{ id: 'a', name: 'Bot', number: '0812-0000-9999', notifyWhatsapp: true }] })
     expect(s.saveDraft(bad).ok).toBe(true)
     const r = s.apply()
     expect(r.ok).toBe(false)

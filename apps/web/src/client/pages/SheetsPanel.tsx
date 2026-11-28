@@ -27,12 +27,12 @@ const fail = (e: unknown, fallback: string): string => (e instanceof Error && e.
 
 type Notice = { kind: 'success' | 'warning' | 'danger'; text: string } | null
 
-export function SheetsPanel() {
+export function SheetsPanel({ startAdding = false }: { startAdding?: boolean } = {}) {
   const [cred, setCred] = useState<GsCredentialStatus | null>(null)
   const [sources, setSources] = useState<GsSource[]>([])
   const [domains, setDomains] = useState<string[]>([])
   const [notice, setNotice] = useState<Notice>(null)
-  const [adding, setAdding] = useState(false)
+  const [adding, setAdding] = useState(startAdding)
 
   const refresh = useCallback(() => {
     window.api.gsCredentialStatus().then(setCred).catch(() => undefined)

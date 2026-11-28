@@ -64,6 +64,10 @@ export interface DashboardData {
   waitingAdmin: number
   recent: LogRow[]
   files: { indexed: number; failed: number }
+  /** Customer messages received since local midnight (groups excluded). */
+  incomingToday?: number
+  /** Customers the bot has collected lead details for (name, need, …). */
+  leads?: number
 }
 
 export interface FeedMessage {
@@ -76,6 +80,8 @@ export interface FeedMessage {
 }
 /** Who answers a chat: the bot, the bot's handoff waiting for an admin, or a person who took over. */
 export type Handling = 'bot' | 'menunggu_admin' | 'manusia'
+/** What the panel shows above a chat: why it was handed over and what the bot learnt (lead, stage, product). */
+export interface ChatInfo { handling: Handling; handoffReason: string | null; handoffAt: number | null; stage: string; lead: Record<string, string>; product: string | null }
 export interface ChatSummary { chatId: string; isGroup: boolean; last: FeedMessage; count: number; handling: Handling }
 
 export interface FileInfo {
@@ -183,6 +189,7 @@ export interface Api {
   setHandlingBulk(chatIds: string[], to: 'manusia' | 'bot'): Promise<{ changed: number }>
   sendAsAdmin(chatId: string, text: string): Promise<{ ok: true } | { ok: false; error: string }>
   getThread(chatId: string): Promise<FeedMessage[]>
+  getChatInfo(chatId: string): Promise<ChatInfo>
   onMessage(cb: (m: FeedMessage) => void): () => void
   onHandoff(cb: (e: { chatId: string; reason: string; summary: string }) => void): () => void
   // Google Sheets connector (owner only)

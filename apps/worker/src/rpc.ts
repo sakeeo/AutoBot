@@ -178,6 +178,13 @@ export function buildRpc(d: RpcDeps): RpcHandlers {
   })
   handle(C.listChats, () => d.feed.chats())
   handle(C.getThread, (chatId: unknown) => d.feed.thread(ChatIdSchema.parse(chatId)))
+  handle(C.getChatInfo, (chatId: unknown) => {
+    const id = ChatIdSchema.parse(chatId)
+    const s = d.conv.getState(id)
+    const h = d.db.prepare("SELECT reason, created_at AS at FROM handoffs WHERE chat_id = ? AND status = 'open' ORDER BY id DESC LIMIT 1").get(id) as { reason: string; at: number } | undefined
+    const p = s.productId ? (d.db.prepare('SELECT name FROM products WHERE id = ?').get(s.productId) as { name: string } | undefined) : undefined
+    return { handling: s.status, handoffReason: h?.reason ?? null, handoffAt: h?.at ?? null, stage: s.stage, lead: s.lead, product: p?.name ?? null }
+  })
   handle(C.getDashboard, () => buildDashboard(d.db, Date.now()))
   return handlers
 }

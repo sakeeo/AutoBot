@@ -14,9 +14,9 @@ import { join } from 'node:path'
 afterEach(cleanup)
 
 describe('PageHeader and Card', () => {
-  it('PageHeader renders one h2 with the title, an optional subtitle and actions', () => {
+  it('PageHeader renders one h1 with the title, an optional subtitle and actions', () => {
     render(<PageHeader icon="bi-gear" title="Judul" subtitle="Penjelasan" actions={<button>Aksi</button>} />)
-    expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(1)
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
     expect(screen.getByRole('heading', { name: 'Judul' })).toBeTruthy()
     expect(screen.getByText('Penjelasan')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Aksi' })).toBeTruthy()

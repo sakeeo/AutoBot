@@ -15,7 +15,7 @@ class FakeGateway implements WaGateway {
   onStatus(_cb: (s: ConnStatus) => void): void {}
   async connect(): Promise<void> {}
   async logout(): Promise<void> {}
-  selfNumber(): string | null { return '6285119308345' }
+  selfNumber(): string | null { return '6281200009999' }
   async onWhatsApp(numbers: string[]): Promise<{ number: string; jid: string | null; exists: boolean }[]> {
     return numbers.map((number) => ({ number, jid: `${number}@s.whatsapp.net`, exists: true }))
   }
@@ -120,7 +120,7 @@ describe('HandoffService.trigger', () => {
   it('never sends to an admin whose number is the bot number', async () => {
     const { gateway, svc } = setup()
     const p = profile()
-    p.admins = [{ id: 'bot', name: 'Bot', number: '0851-1930-8345', notifyWhatsapp: true }]
+    p.admins = [{ id: 'bot', name: 'Bot', number: '0812-0000-9999', notifyWhatsapp: true }]
     const r = await svc.trigger({ profile: p, chatId: C, reason: 'komplain', productName: null })
     expect(gateway.sent).toEqual([])
     expect(r.notified).toEqual([])

@@ -10,7 +10,9 @@ export const id = {
     connector: 'Connector',
     knowledge: 'Pengetahuan',
     brand: 'Brand & Konversi',
-    security: 'Keamanan & Umum'
+    security: 'Keamanan',
+    ai: 'AI',
+    more: 'Lainnya'
   },
   state: {
     disconnected: 'Terputus',

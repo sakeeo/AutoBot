@@ -5,7 +5,7 @@ import { BrandPage } from '../../src/client/pages/BrandPage'
 import { ApplyBar } from '../../src/client/brand/ApplyBar'
 import { PRESETS, type BrandProfile, type Issue } from '@autobot/contracts/brand'
 
-const BOT = '6285119308345'
+const BOT = '6281200009999'
 
 const profile = (over: Partial<BrandProfile> = {}): BrandProfile => ({
   ...structuredClone(PRESETS.toko_online),
@@ -169,7 +169,7 @@ describe('BrandPage: links and admins', () => {
     await waitFor(() => expect(lastSaved(api).links).toHaveLength(1))
   })
   it('warns when an admin number equals the bot number', async () => {
-    setApi(profile({ admins: [{ id: 'a1', name: 'Bot', number: '0851-1930-8345', notifyWhatsapp: true }] }))
+    setApi(profile({ admins: [{ id: 'a1', name: 'Bot', number: '0812-0000-9999', notifyWhatsapp: true }] }))
     render(<BrandPage />)
     await openLinks()
     expect((await screen.findAllByText(/sama dengan nomor bot/i)).length).toBeGreaterThan(0)
@@ -337,7 +337,7 @@ describe('BrandPage: layout and destructive actions', () => {
     setApi(profile())
     render(<BrandPage />)
     await screen.findByLabelText('Nama bisnis')
-    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent?.trim())).toEqual(['Brand & Konversi'])
+    expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent?.trim())).toEqual(['Brand & Konversi'])
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
       'Identitas & Gaya', 'Arah Konversi', 'Tautan & Admin', 'Lead & Pesan', 'Jam & Batas', 'Perilaku balasan'
     ])

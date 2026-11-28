@@ -21,7 +21,7 @@ class FakeGateway implements WaGateway {
   onStatus(_cb: (s: ConnStatus) => void): void {}
   async connect(): Promise<void> {}
   async logout(): Promise<void> {}
-  selfNumber(): string | null { return '6285119308345' }
+  selfNumber(): string | null { return '6281200009999' }
   async onWhatsApp(numbers: string[]): Promise<{ number: string; jid: string | null; exists: boolean }[]> {
     return numbers.map((number) => ({ number, jid: `${number}@s.whatsapp.net`, exists: true }))
   }
@@ -67,7 +67,7 @@ function setup(opts: { empty?: boolean } = {}) {
   if (!opts.empty) {
     store.replaceFile('/k/faq.md', 1, [
       'Paket Website UMKM Rp1.500.000 per tahun, sudah termasuk domain dan hosting.',
-      'Tanya lewat WhatsApp 0851-1930-8345 untuk info lebih lanjut'
+      'Tanya lewat WhatsApp 0812-0000-9999 untuk info lebih lanjut'
     ])
     catalog.replaceFromFile('/k/katalog.csv', PRODUCTS)
   }
@@ -297,10 +297,10 @@ describe('forced handoff', () => {
 describe('output guards', () => {
   it('never lets the bot number reach the customer', async () => {
     const t = setup()
-    const p = scripted([out({ reply_parts: ['Harga Rp1,5 juta per tahun.', 'Hubungi WhatsApp 0851-1930-8345 ya Kak.'] })])
+    const p = scripted([out({ reply_parts: ['Harga Rp1,5 juta per tahun.', 'Hubungi WhatsApp 0812-0000-9999 ya Kak.'] })])
     const r = await turn(t, toko(), p.provider, 'berapa harga website umkm?')
     const all = r.replyParts.join(' ')
-    expect(all).not.toMatch(/0851|8345|85119308345/)
+    expect(all).not.toMatch(/0851|8345|81200009999/)
     expect(all).toContain('Rp1,5 juta')
     expect(r.removed.numbers).toBe(true)
   })

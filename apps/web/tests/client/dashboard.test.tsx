@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, cleanup, waitFor, within, fireEvent } from '@testing-library/react'
+vi.mock('next/link', () => ({ default: ({ href, children, ...p }: any) => <a href={href} {...p}>{children}</a> }))
 import { DashboardPage } from '../../src/client/pages/DashboardPage'
 import { PRESETS } from '@autobot/contracts/brand'
 import type { DashboardData } from '@autobot/contracts/ipc'
@@ -41,50 +42,70 @@ beforeEach(() => setApi())
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
 describe('DashboardPage', () => {
-  it('shows the WhatsApp badge and follows status events', async () => {
-    const { emit } = setApi({ status: { state: 'disconnected' } })
+  const quick = () => screen.findByRole('region', { name: 'Mulai cepat' })
+
+  it('says the bot is off and switches it on from the Mulai cepat card', async () => {
+    const { api } = setApi({ bot: false })
     render(<DashboardPage />)
-    expect(await screen.findByText('Terputus')).toBeTruthy()
-    emit({ state: 'connected' })
-    expect(await screen.findByText('Terhubung')).toBeTruthy()
+    const card = await quick()
+    expect(within(card).getByText(/bot nonaktif/i)).toBeTruthy()
+    fireEvent.click(within(card).getByRole('button', { name: 'Aktifkan bot' }))
+    await waitFor(() => expect(api.setBotEnabled).toHaveBeenCalledWith(true))
+    expect(await within(card).findByText(/bot aktif/i)).toBeTruthy()
+    expect(within(card).getByRole('button', { name: 'Matikan bot' })).toBeTruthy()
   })
 
-  it('shows AI as active only when AI mode has a key', async () => {
+  it('lists what is missing, each with a button to the page that fixes it, and follows the WhatsApp status', async () => {
+    const { emit } = setApi({ admins: false, status: { state: 'disconnected' } })
+    localStorage.clear()
+    render(<DashboardPage />)
+    const card = await quick()
+    await within(card).findByText('Admin dikabari saat chat diserahkan')
+    expect(within(card).getByRole('link', { name: 'Hubungkan' }).getAttribute('href')).toBe('/pengaturan/connector')
+    expect(within(card).getByRole('link', { name: 'Tambah' }).getAttribute('href')).toBe('/pengaturan/pengetahuan')
+    expect(within(card).getByRole('link', { name: 'Atur' }).getAttribute('href')).toBe('/pengaturan/brand')
+    expect(within(card).getByRole('link', { name: 'Buka Uji' }).getAttribute('href')).toBe('/uji')
+    emit({ state: 'connected' })
+    await waitFor(() => expect(within(card).queryByRole('link', { name: 'Hubungkan' })).toBeNull())
+  })
+
+  it('hides the checklist once everything is done', async () => {
+    setApi({ data: { ...empty, files: { indexed: 3, failed: 0 } } })
+    localStorage.setItem('autobot-tested', '1')
+    render(<DashboardPage />)
+    const card = await quick()
+    await waitFor(() => expect(within(card).queryByText(/selesaikan langkah ini/i)).toBeNull())
+    localStorage.clear()
+  })
+
+  it('warns when AI mode has no key', async () => {
+    setApi({ settings: { mode: 'ai' }, key: false })
+    render(<DashboardPage />)
+    expect(await screen.findByText(/api key belum diatur/i)).toBeTruthy()
+    cleanup()
     setApi({ settings: { mode: 'ai' }, key: true })
     render(<DashboardPage />)
-    expect(await screen.findByText(/ai: aktif/i)).toBeTruthy()
-    cleanup()
-    setApi({ settings: { mode: 'extractive' } })
-    render(<DashboardPage />)
-    expect(await screen.findByText(/ai: nonaktif/i)).toBeTruthy()
+    await quick()
+    expect(screen.queryByText(/api key belum diatur/i)).toBeNull()
   })
 
-  it('shows today and 7-day numbers and the number waiting for an admin', async () => {
-    setApi({
-      data: {
-        ...empty,
-        today: { replied: 12, refused: 3, handoff: 2, errors: 1, links: 4 },
-        week: { replied: 80, refused: 9, handoff: 6, errors: 2, links: 11 },
-        waitingAdmin: 5
-      }
-    })
+  it('shows the four numbers of the day', async () => {
+    setApi({ data: { ...empty, today: { replied: 12, refused: 3, handoff: 2, errors: 3, links: 4 }, waitingAdmin: 1, incomingToday: 25, leads: 7 } })
     render(<DashboardPage />)
-    const today = await screen.findByRole('region', { name: 'Hari ini' })
-    expect(within(today).getByText('Dibalas').nextSibling?.textContent).toBe('12')
-    expect(within(today).getByText('Tautan terkirim').nextSibling?.textContent).toBe('4')
-    const week = screen.getByRole('region', { name: '7 hari terakhir' })
-    expect(within(week).getByText('Diserahkan ke admin').nextSibling?.textContent).toBe('6')
-    expect(within(screen.getByRole('region', { name: 'Menunggu admin' })).getByText('5')).toBeTruthy()
+    await screen.findByText('Pesan masuk hari ini')
+    const metric = (label: string) => screen.getByText(label).parentElement as HTMLElement
+    await waitFor(() => expect(within(metric('Pesan masuk hari ini')).getByText('25')).toBeTruthy())
+    await waitFor(() => expect(metric('Dibalas bot').textContent).toMatch(/60%/))
+    expect(metric('Diserahkan ke admin').textContent).toMatch(/1 masih menunggu admin/)
+    await waitFor(() => expect(within(metric('Lead terkumpul')).getByText('7')).toBeTruthy())
   })
 
-  it('shows zeros and an empty-state line when there is no activity', async () => {
+  it('shows an empty-state line when there is no activity', async () => {
     render(<DashboardPage />)
     expect(await screen.findByText(/belum ada aktivitas/i)).toBeTruthy()
-    const today = screen.getByRole('region', { name: 'Hari ini' })
-    expect(within(today).getByText('Dibalas').nextSibling?.textContent).toBe('0')
   })
 
-  it('lists the recent events with their decision and message', async () => {
+  it('lists recent activity with time, customer, message and a plain-language decision that opens the chat', async () => {
     setApi({
       data: {
         ...empty,
@@ -93,26 +114,9 @@ describe('DashboardPage', () => {
       }
     })
     render(<DashboardPage />)
-    expect(await screen.findByText(/handoff:komplain/)).toBeTruthy()
-    expect(screen.getByText(/barang rusak/)).toBeTruthy()
-  })
-
-  it('warns about a missing admin, an AI mode without key, and no knowledge document', async () => {
-    setApi({ admins: false, settings: { mode: 'ai' }, key: false })
-    render(<DashboardPage />)
-    expect(await screen.findByText(/belum ada admin/i)).toBeTruthy()
-    expect(screen.getByText(/api key belum diatur/i)).toBeTruthy()
-    expect(screen.getByText(/belum ada dokumen pengetahuan/i)).toBeTruthy()
-  })
-
-  it('shows no warnings when everything is set up', async () => {
-    const { api } = setApi({ settings: { mode: 'ai' }, key: true, data: { ...empty, files: { indexed: 2, failed: 0 } } })
-    render(<DashboardPage />)
-    await waitFor(() => expect(api.getBrand).toHaveBeenCalled())
-    await screen.findByText(/ai: aktif/i)
-    expect(screen.queryByText(/belum ada admin/i)).toBeNull()
-    expect(screen.queryByText(/api key belum diatur/i)).toBeNull()
-    expect(screen.queryByText(/belum ada dokumen/i)).toBeNull()
+    expect(await screen.findByText(/barang rusak/)).toBeTruthy()
+    expect(screen.getByText('Diserahkan: komplain').className).toMatch(/badge/)
+    expect(screen.getByRole('link', { name: 'Buka chat 62812' }).getAttribute('href')).toBe('/pesan?chat=62812%40s.whatsapp.net')
   })
 
   it('refreshes every 15 seconds and stops on unmount', async () => {
@@ -142,39 +146,5 @@ describe('DashboardPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Coba lagi' }))
     expect(await screen.findByText(/belum ada aktivitas/i)).toBeTruthy()
     expect(api.getDashboard).toHaveBeenCalledTimes(2)
-  })
-
-  it('shows configuration warnings as banners that can be dismissed one by one', async () => {
-    setApi({ admins: false, settings: { mode: 'ai' }, key: false })
-    render(<DashboardPage />)
-    await screen.findByText(/belum ada admin/i)
-    expect(screen.getAllByRole('button', { name: 'Tutup peringatan' })).toHaveLength(3)
-    fireEvent.click(screen.getAllByRole('button', { name: 'Tutup peringatan' })[0])
-    expect(screen.queryByText(/belum ada admin/i)).toBeNull()
-    expect(screen.getByText(/api key belum diatur/i)).toBeTruthy()
-    expect(screen.getAllByRole('button', { name: 'Tutup peringatan' })).toHaveLength(2)
-  })
-
-  it('makes the headline number a KPI and keeps the other numbers small', async () => {
-    setApi({ data: { ...empty, today: { replied: 12, refused: 3, handoff: 2, errors: 1, links: 4 } } })
-    render(<DashboardPage />)
-    const today = await screen.findByRole('region', { name: 'Hari ini' })
-    expect((within(today).getByText('Dibalas').nextSibling as HTMLElement).className).toMatch(/kpi-value/)
-    expect((within(today).getByText('Ditolak').nextSibling as HTMLElement).className).not.toMatch(/kpi-value/)
-  })
-
-  it('lists recent activity as a table with a time, a text badge for the decision and the message', async () => {
-    setApi({
-      data: {
-        ...empty,
-        recent: [{ message_id: '1', chat_id: '62812@s.whatsapp.net', decision: 'replied:ai', top_score: null,
-          sources: null, created_at: 1700000000000, text: 'berapa harga?' }]
-      }
-    })
-    render(<DashboardPage />)
-    await screen.findByText(/berapa harga/)
-    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Waktu', 'Keputusan', 'Pesan'])
-    const badge = screen.getByText('replied:ai')
-    expect(badge.className).toMatch(/badge/)
   })
 })

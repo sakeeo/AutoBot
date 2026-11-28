@@ -6,7 +6,7 @@ Status: draft untuk ditinjau. Melengkapi `PRD.md` bagian 5.2b dan 5.2c. Belum ad
 
 Contoh nyata dari uji coba:
 
-> Bot: "Pilihan tergantung kebutuhan Anda. Kalau ingin estimasi yang pasti, bisa konsultasi gratis lewat WhatsApp 0851-1930-8345."
+> Bot: "Pilihan tergantung kebutuhan Anda. Kalau ingin estimasi yang pasti, bisa konsultasi gratis lewat WhatsApp 0812-0000-9999."
 
 Nomor itu adalah nomor bot sendiri. Akar masalahnya ada empat:
 

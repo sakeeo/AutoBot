@@ -105,3 +105,19 @@ describe('buildDashboard trend', () => {
     expect(t.reduce((n, d) => n + d.replied, 0)).toBe(2)
   })
 })
+
+describe('dashboard numbers for the Figma cards', () => {
+  it('counts customer messages since midnight (groups excluded) and customers with lead details', () => {
+    const db = openDb(':memory:')
+    const msg = (chat: string, dir: string, at: number, group = 0) =>
+      db.prepare('INSERT INTO messages(wa_id, chat_id, direction, text, is_group, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(`w${++n}`, chat, dir, 'x', group, at)
+    msg('a@s.whatsapp.net', 'in', startOfDay + HOUR)
+    msg('a@s.whatsapp.net', 'out', startOfDay + HOUR)
+    msg('b@s.whatsapp.net', 'in', startOfDay - HOUR)
+    msg('g@g.us', 'in', startOfDay + HOUR, 1)
+    db.prepare("INSERT INTO contacts(chat_id, lead_json) VALUES ('a@s.whatsapp.net', '{\"nama\":\"Budi\"}'), ('b@s.whatsapp.net', '{}')").run()
+    const d = buildDashboard(db, NOW)
+    expect(d.incomingToday).toBe(1)
+    expect(d.leads).toBe(1)
+  })
+})

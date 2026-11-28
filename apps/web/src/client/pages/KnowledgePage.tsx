@@ -8,12 +8,14 @@ import { PageHeader } from '../ui/PageHeader'
 import { EmptyState } from '../ui/States'
 import { StatusBadge } from '../ui/StatusBadge'
 import { SheetsPanel } from './SheetsPanel'
+import { DEMO_DOCS } from '../demo/demo-knowledge'
 
 const fromSheets = (name: string): boolean => name.startsWith('_gsheets/')
 const baseName = (name: string): string => name.split('/').pop() || name
 
 export function KnowledgePage() {
   const [tab, setTab] = useState<'files' | 'sheets'>('files')
+  const [addSheet, setAddSheet] = useState(false)
   const [files, setFiles] = useState<FileInfo[]>([])
   const [notice, setNotice] = useState<{ kind: 'success' | 'warning' | 'danger'; text: string } | null>(null)
   const [busy, setBusy] = useState(false)
@@ -48,6 +50,10 @@ export function KnowledgePage() {
     }
   }
 
+  async function loadDemo() {
+    await upload(DEMO_DOCS.map((d) => new File([d.content], d.name, { type: 'text/markdown' })))
+  }
+
   async function remove(file: string) {
     setNotice(null)
     try {
@@ -61,12 +67,13 @@ export function KnowledgePage() {
 
   return (
     <div>
-      <PageHeader icon="bi-folder2-open" title="Pengetahuan"
-        subtitle="Bot hanya menjawab dari dokumen di sini (.md .txt .pdf .docx .csv .xlsx .json, maksimal 20 MB per file). File .env, *.key, dan *.pem ditolak."
+      <PageHeader title="Pengetahuan"
+        subtitle="Bot hanya menjawab dari dokumen dan Google Sheet yang Anda tambahkan."
         actions={
-          <button className="btn btn-outline-secondary" onClick={() => window.api.reindex().then(refresh)}>
-            <i className="bi bi-arrow-repeat me-1" aria-hidden="true" />Index ulang
-          </button>
+          <>
+            <button type="button" className="btn btn-outline-secondary" disabled={busy} onClick={() => { setTab('files'); input.current?.click() }}>Unggah berkas</button>
+            <button type="button" className="btn btn-cta" onClick={() => { setAddSheet(true); setTab('sheets') }}>+ Tambah Google Sheet</button>
+          </>
         } />
 
       <ul className="nav nav-tabs mb-3" role="tablist">
@@ -76,31 +83,16 @@ export function KnowledgePage() {
           </li>
         ))}
       </ul>
-      {tab === 'sheets' ? <SheetsPanel /> : (<>
+      <input ref={input} id="kb-file" type="file" multiple hidden
+        accept=".md,.txt,.pdf,.docx,.csv,.xlsx,.json" onChange={(e) => void upload([...(e.target.files ?? [])])} />
+      {tab === 'sheets' ? <SheetsPanel startAdding={addSheet} /> : (<>
       {notice && <div className={`alert alert-${notice.kind}`} role="status">{notice.text}</div>}
-
-      <Card title="Unggah dokumen" className="mb-3">
-        <div className={`border border-2 rounded p-4 text-center ${dragging ? 'border-primary' : 'border-secondary-subtle'}`}
-          style={{ borderStyle: 'dashed' }}
-          onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={(e) => { e.preventDefault(); setDragging(false); void upload([...e.dataTransfer.files]) }}>
-          <i className="bi bi-cloud-arrow-up fs-2 text-body-secondary" aria-hidden="true" />
-          <p className="mb-2">Tarik dokumen ke sini, atau</p>
-          <input ref={input} id="kb-file" type="file" multiple hidden
-            accept=".md,.txt,.pdf,.docx,.csv,.xlsx,.json" onChange={(e) => void upload([...(e.target.files ?? [])])} />
-          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => input.current?.click()}>
-            <i className="bi bi-upload me-1" aria-hidden="true" />{busy ? 'Mengunggah…' : 'Pilih berkas'}
-          </button>
-        </div>
-      </Card>
-
-      <Card title="File terindeks">
+      <Card title="Dokumen" className="mb-3 kb-files" actions={<button type="button" className="btn btn-sm btn-link" onClick={() => window.api.reindex().then(refresh)}>Index ulang</button>}>
         <DataTable<FileInfo>
           caption="File terindeks"
           rows={files}
           rowKey={(f) => f.file}
-          empty={<EmptyState title="Belum ada file terindeks." hint="Unggah dokumen di atas. Bot baru bisa menjawab setelah ada isinya." />}
+          empty={<EmptyState title="Belum ada dokumen." hint="Bot baru bisa menjawab setelah ada isinya." />}
           columns={[
             { key: 'file', header: 'File', render: (f) => <span className="text-break" title={f.file}>{f.file}</span> },
             {
@@ -127,6 +119,26 @@ export function KnowledgePage() {
           ]}
         />
       </Card>
+
+      {files.length === 0 && (
+        <section className="card demo-card mb-3" aria-label="Data contoh">
+          <div className="card-body text-center">
+            <strong>Belum punya dokumen?</strong>
+            <p className="text-body-secondary small mb-3">Coba dulu dengan data contoh (profil, harga, proses kerja, dan kebijakan fiktif). Hapus kapan saja.</p>
+            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void loadDemo()}>Pakai data contoh</button>
+          </div>
+        </section>
+      )}
+
+      <div className={`kb-drop${dragging ? ' is-dragging' : ''}`}
+        onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => { e.preventDefault(); setDragging(false); void upload([...e.dataTransfer.files]) }}>
+        <i className="bi bi-cloud-arrow-up" aria-hidden="true" />
+        <span>Tarik berkas ke sini, atau <button type="button" className="btn btn-link p-0 align-baseline" disabled={busy} onClick={() => input.current?.click()}>{busy ? 'mengunggah…' : 'pilih berkas'}</button></span>
+        <small>.md .txt .pdf .docx .csv .xlsx .json · maks. 20 MB · berkas .env, *.key, *.pem ditolak</small>
+      </div>
+      <div className="alert alert-warning mt-3 mb-0 small" role="note">Isi dokumen dan sheet menjadi bahan jawaban bot. Jangan simpan data internal (harga modal, data pelanggan) di sini.</div>
       </>)}
     </div>
   )

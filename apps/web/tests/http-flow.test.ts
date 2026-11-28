@@ -61,7 +61,7 @@ describe('the wizard over HTTP', () => {
     const env = makeWebEnv(); const token = env.sys.setup.ensureToken()!
     const jar = new Jar(); await call(setup.token, { path: '/api/setup/token', body: { token }, jar })
     const s = await json(await call(setup.state, { method: 'GET', path: '/api/setup/state', jar }))
-    expect(s).toMatchObject({ ok: true, progress: { phoneVerified: false, hasAccount: false }, wa: { state: 'connected' }, botNumber: '62••••345' })
+    expect(s).toMatchObject({ ok: true, progress: { phoneVerified: false, hasAccount: false }, wa: { state: 'connected' }, botNumber: '62••••999' })
     expect(JSON.stringify(s)).not.toContain(env.worker.self!)
   })
   it('passes on the reason when the code cannot be delivered', async () => {

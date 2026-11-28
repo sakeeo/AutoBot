@@ -40,21 +40,32 @@ function setApi(over: Record<string, unknown> = {}) {
 beforeEach(() => setApi())
 afterEach(cleanup)
 
-const h2s = () => screen.getAllByRole('heading', { level: 2 })
+const h2s = () => screen.getAllByRole('heading', { level: 1 })
 
 describe('ConnectionPage', () => {
   it('has a single page title with the status as a text badge', async () => {
     render(<ConnectionPage />)
     await screen.findByText('Terhubung')
-    expect(h2s().map((h) => h.textContent?.trim())).toEqual(['Koneksi WhatsApp'])
+    expect(h2s().map((h) => h.textContent?.trim())).toEqual(['Connector'])
+    expect(screen.getByText('Terhubung').className).toMatch(/badge/)
   })
   it('logging out takes two steps and the first never calls the API', async () => {
     const api = setApi()
     render(<ConnectionPage />)
-    fireEvent.click(await screen.findByRole('button', { name: /keluar dari whatsapp/i }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Putuskan WhatsApp' }))
     expect(api.logout).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Ya, keluar' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ya, Putuskan WhatsApp' }))
     expect(api.logout).toHaveBeenCalledTimes(1)
+  })
+  it('switches the bot on and off from the Status bot card', async () => {
+    let on = false
+    const api = setApi({ getBotEnabled: vi.fn().mockImplementation(async () => on), setBotEnabled: vi.fn().mockImplementation(async (v: boolean) => (on = v)) })
+    render(<ConnectionPage />)
+    const sw = (await screen.findByRole('switch', { name: 'Bot membalas pelanggan' })) as HTMLInputElement
+    await waitFor(() => expect(sw.disabled).toBe(false))
+    fireEvent.click(sw)
+    await waitFor(() => expect((api as any).setBotEnabled).toHaveBeenCalledWith(true))
+    await waitFor(() => expect(sw.checked).toBe(true))
   })
   it('shows an error state with retry when the status cannot be read', async () => {
     const api = setApi({ getStatus: vi.fn().mockRejectedValueOnce(new Error('x')).mockResolvedValue({ state: 'disconnected' }) })
@@ -69,12 +80,12 @@ describe('ConnectionPage', () => {
 describe('KnowledgePage', () => {
   it('has a single page title and explains the empty state', async () => {
     render(<KnowledgePage />)
-    expect(await screen.findByText(/belum ada file terindeks/i)).toBeTruthy()
+    expect(await screen.findByText(/belum ada dokumen/i)).toBeTruthy()
     expect(h2s().map((h) => h.textContent?.trim())).toEqual(['Pengetahuan'])
   })
   it('has no folder picker and no exclude patterns: the server owns the one knowledge folder', async () => {
     render(<KnowledgePage />)
-    await screen.findByText(/belum ada file terindeks/i)
+    await screen.findByText(/belum ada dokumen/i)
     expect(screen.queryByRole('button', { name: /pilih folder/i })).toBeNull()
     expect(screen.queryByLabelText(/pola pengecualian/i)).toBeNull()
   })
@@ -118,9 +129,18 @@ describe('KnowledgePage', () => {
   it('uploads files dropped onto the drop area', async () => {
     const api = setApi({ uploadKnowledge: vi.fn().mockResolvedValue({ added: ['b.txt'], rejected: [] }) })
     render(<KnowledgePage />)
-    const zone = (await screen.findByText(/tarik dokumen ke sini/i)).parentElement as HTMLElement
+    const zone = (await screen.findByText(/tarik berkas ke sini/i)).parentElement as HTMLElement
     fireEvent.drop(zone, { dataTransfer: { files: [new File(['isi'], 'b.txt')] } })
     await waitFor(() => expect(api.uploadKnowledge).toHaveBeenCalledTimes(1))
+  })
+  it('loads the demo documents from "Pakai data contoh" when there are none', async () => {
+    const api = setApi({ uploadKnowledge: vi.fn().mockResolvedValue({ added: ['contoh-profil-kerabat-koding.md'], rejected: [] }) })
+    render(<KnowledgePage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Pakai data contoh' }))
+    await waitFor(() => expect(api.uploadKnowledge).toHaveBeenCalledTimes(1))
+    const names = (api.uploadKnowledge as any).mock.calls[0][0].map((f: File) => f.name)
+    expect(names).toHaveLength(5)
+    expect(names.every((n: string) => n.startsWith('contoh-'))).toBe(true)
   })
   it('shows a failed upload as an error, not as success', async () => {
     setApi({ uploadKnowledge: vi.fn().mockRejectedValue(new Error('Unggahan lebih dari 20 MB.')) })
@@ -174,20 +194,21 @@ describe('SecurityPage', () => {
   afterEach(() => vi.unstubAllGlobals())
   const type = (el: HTMLElement, v: string) => fireEvent.change(el, { target: { value: v } })
 
-  it('has a single page title and one card per kind of change', async () => {
+  it('has a single page title and one line per setting', async () => {
     render(<SecurityPage />)
-    for (const name of ['Perangkat yang sedang masuk', 'Ganti password', 'Kode pemulihan', 'Authenticator', 'Nomor pemilik', 'Tampilan', 'Notifikasi di browser'])
+    for (const name of ['Password', 'Nomor pemilik', 'Authenticator (TOTP)', 'Kode pemulihan', 'Sesi aktif', 'Jam server', 'Cadangan', 'Tampilan', 'Notifikasi di browser'])
       expect(await screen.findByRole('region', { name })).toBeTruthy()
-    expect(h2s().map((h) => h.textContent?.trim())).toEqual(['Keamanan & Umum'])
-    expect(screen.getByText(/masuk sebagai budi/i)).toBeTruthy()
+    expect(h2s().map((h) => h.textContent?.trim())).toEqual(['Keamanan'])
+    expect(await screen.findByText(/akun pemilik \(budi\)/i)).toBeTruthy()
   })
   it('has no desktop-era controls: no login on/off, no auto-start, no lock timer', async () => {
     render(<SecurityPage />)
-    await screen.findByRole('region', { name: 'Ganti password' })
+    await screen.findByRole('region', { name: 'Password' })
     for (const gone of [/nonaktifkan login/i, /jalankan saat komputer/i, /kunci otomatis/i]) expect(screen.queryByText(gone)).toBeNull()
   })
   it('lists the devices, marks the current one, and signs another one out only after confirmation', async () => {
     render(<SecurityPage />)
+    fireEvent.click(within(await screen.findByRole('region', { name: 'Sesi aktif' })).getByRole('button', { name: 'Lihat' }))
     expect(await screen.findByText('Perangkat ini')).toBeTruthy()
     fireEvent.click(await screen.findByRole('button', { name: 'keluarkan perangkat ini' }))
     expect(posts).toEqual([])
@@ -196,7 +217,8 @@ describe('SecurityPage', () => {
   })
   it('changing the password sends the old password, the authenticator code and the new password', async () => {
     render(<SecurityPage />)
-    const card = within(await screen.findByRole('region', { name: 'Ganti password' }))
+    const card = within(await screen.findByRole('region', { name: 'Password' }))
+    fireEvent.click(card.getByRole('button', { name: 'Ganti' }))
     type(card.getByLabelText('Password saat ini'), 'sandi lama panjang sekali')
     type(card.getByLabelText('Kode authenticator'), '123456')
     type(card.getByLabelText('Password baru'), 'sandi baru panjang sekali ya')
@@ -207,7 +229,8 @@ describe('SecurityPage', () => {
   })
   it('does not send anything when the two new passwords differ', async () => {
     render(<SecurityPage />)
-    const card = within(await screen.findByRole('region', { name: 'Ganti password' }))
+    const card = within(await screen.findByRole('region', { name: 'Password' }))
+    fireEvent.click(card.getByRole('button', { name: 'Ganti' }))
     type(card.getByLabelText('Password saat ini'), 'sandi lama panjang sekali')
     type(card.getByLabelText('Kode authenticator'), '123456')
     type(card.getByLabelText('Password baru'), 'sandi baru panjang sekali ya')
@@ -219,6 +242,7 @@ describe('SecurityPage', () => {
   it('shows new recovery codes once and forgets them when told they are saved', async () => {
     render(<SecurityPage />)
     const card = within(await screen.findByRole('region', { name: 'Kode pemulihan' }))
+    fireEvent.click(card.getByRole('button', { name: 'Buat ulang' }))
     type(card.getByLabelText('Password'), 'sandi lama panjang sekali')
     type(card.getByLabelText('Kode authenticator'), '123456')
     fireEvent.click(card.getByRole('button', { name: 'Buat ulang kode pemulihan' }))
@@ -247,6 +271,7 @@ describe('SecurityPage', () => {
   })
   it('signing out of every device takes two steps', async () => {
     render(<SecurityPage />)
+    fireEvent.click(within(await screen.findByRole('region', { name: 'Sesi aktif' })).getByRole('button', { name: 'Lihat' }))
     fireEvent.click(await screen.findByRole('button', { name: /keluar dari semua perangkat/i }))
     expect(posts).toEqual([])
     fireEvent.click(screen.getByRole('button', { name: 'Ya, keluar semua' }))

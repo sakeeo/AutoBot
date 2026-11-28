@@ -73,6 +73,8 @@ export function buildDashboard(db: Db, now: number): DashboardData {
     files: {
       indexed: count("SELECT COUNT(*) AS n FROM files WHERE status = 'indexed'"),
       failed: count("SELECT COUNT(*) AS n FROM files WHERE status = 'failed'")
-    }
+    },
+    incomingToday: count("SELECT COUNT(*) AS n FROM messages WHERE direction = 'in' AND is_group = 0 AND created_at >= ?", midnight.getTime()),
+    leads: count("SELECT COUNT(*) AS n FROM contacts WHERE lead_json NOT IN ('{}', '')")
   }
 }

@@ -91,7 +91,7 @@ export function AiSettings() {
 
   return (
     <div style={{ maxWidth: 840 }}>
-      <PageHeader icon="bi-stars" title="Connector AI (BYOK)"
+      <PageHeader title="AI"
         subtitle="Opsional. Tanpa AI, bot membalas dengan kutipan dokumen. Dengan AI, jawaban disusun hanya dari potongan dokumen yang relevan. Anda memakai API key sendiri; biaya token ditanggung Anda." />
 
       {settings && (

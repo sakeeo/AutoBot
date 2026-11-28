@@ -1,11 +1,17 @@
-/* ===================== Uji Jawaban: a chat window ===================== */
+/* ===================== Uji Jawaban: a chat window (Figma: WhatsApp-like header and wallpaper) ===================== */
+:root { --tchat-head: #075E54; --tchat-wall: #EFE9E1; }
+[data-bs-theme="dark"] { --tchat-head: #1F4A35; --tchat-wall: #0E1310; }
+.tchat-head { display: flex; align-items: center; gap: var(--space-3); min-height: 56px; padding: 0 var(--space-4); background: var(--tchat-head); color: #FFFFFF; }
+.tchat-head .chat-avatar { width: 32px; height: 32px; background: rgba(255, 255, 255, 0.25); }
+.tchat-head strong { flex: 1; font-size: 0.9375rem; }
+.tchat-clear { --bs-btn-color: #FFFFFF; --bs-btn-border-color: rgba(255, 255, 255, 0.6); --bs-btn-hover-color: #FFFFFF; --bs-btn-hover-bg: rgba(255, 255, 255, 0.15); --bs-btn-hover-border-color: #FFFFFF; min-height: 32px; }
 .tchat {
-  display: flex; flex-direction: column; height: calc(100vh - 300px); min-height: 380px; overflow: hidden;
+  display: flex; flex-direction: column; height: calc(100vh - 290px); min-height: 380px; overflow: hidden;
   background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-card);
 }
 .tchat-thread {
   flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-2);
-  padding: var(--space-4); background: var(--color-background);
+  padding: var(--space-4); background: var(--tchat-wall);
 }
 .tchat-row { display: flex; }
 .tchat-row-user { justify-content: flex-end; }
@@ -16,8 +22,8 @@
   border-radius: 14px; border: 1px solid var(--color-border); overflow-wrap: anywhere;
 }
 .tchat-col .tchat-bubble { max-width: 100%; }
-.tchat-bubble-user { background: var(--color-primary); color: var(--color-on-primary); border-bottom-right-radius: 4px; }
-.tchat-bubble-bot { background: var(--color-surface); color: var(--color-text-primary); border-bottom-left-radius: 4px; }
+.tchat-bubble-user { background: var(--color-bubble-out); color: var(--color-text-primary); border-color: transparent; border-bottom-right-radius: 4px; }
+.tchat-bubble-bot { background: var(--color-surface); color: var(--color-text-primary); border-color: transparent; border-bottom-left-radius: 4px; }
 .tchat-text { white-space: pre-wrap; }
 .tchat-time { display: block; margin-top: 2px; text-align: right; font-size: 0.6875rem; opacity: 0.65; }
 .tchat-silent { align-self: center; font-size: 0.75rem; color: var(--color-text-muted); padding: 2px 10px; border-radius: 999px; background: var(--color-neutral-soft); }
@@ -47,15 +53,15 @@
 }
 .tchat-input {
   flex: 1; resize: none; max-height: 120px; min-height: 40px; padding: 9px 16px; font-size: 0.875rem;
-  border: 1px solid var(--color-control-border); border-radius: 20px; background: var(--color-background);
+  border: 1px solid var(--color-input-border); border-radius: 20px; background: var(--color-input-bg);
   color: var(--color-text-primary); field-sizing: content;
 }
 .tchat-input:focus { outline: 2px solid var(--color-primary); outline-offset: 0; }
 .tchat-send {
   flex: none; width: 40px; height: 40px; border: 0; border-radius: 50%;
-  background: var(--color-primary); color: var(--color-on-primary); display: inline-flex; align-items: center; justify-content: center;
+  background: var(--color-ink); color: var(--color-on-ink); display: inline-flex; align-items: center; justify-content: center;
 }
-.tchat-send:hover:not(:disabled) { background: var(--color-primary-dark); }
+.tchat-send:hover:not(:disabled) { background: var(--color-ink-hover); }
 .tchat-send:disabled { opacity: 0.45; }
 .tchat-foot { margin: var(--space-2) 0 0; font-size: 0.75rem; color: var(--color-text-muted); }
 @media (prefers-reduced-motion: reduce) { .tchat-typing i { animation: none; opacity: 0.6; } }
@@ -73,12 +79,11 @@
 /* Filter above the conversation list on the Pesan page. */
 .chat-filter { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-bottom: var(--space-3); }
 .chat-filter-btn {
-  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; font-size: 0.75rem; font-weight: 600;
-  border: 1px solid var(--color-control-border); border-radius: 999px;
-  background: var(--color-surface); color: var(--color-primary-text);
+  display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 var(--space-3);
+  border: 0; border-radius: 999px; background: var(--color-neutral-soft); color: var(--color-text-primary); font-size: 0.75rem; font-weight: 600;
 }
-.chat-filter-btn:hover { background: var(--color-primary-light); }
-.chat-filter-btn.is-active { background: var(--color-primary); border-color: var(--color-primary); color: var(--color-on-primary); }
+.chat-filter-btn:hover { background: var(--color-border); }
+.chat-filter-btn.is-active { background: var(--color-ink); color: var(--color-on-ink); }
 .chat-filter-count { font-weight: 500; opacity: 0.8; }
 
 /* Bulk selection on the Pesan page. */
@@ -90,3 +95,6 @@
 .chat-pick { display: flex; align-items: center; gap: var(--space-2); }
 .chat-pick .chat-row { flex: 1; min-width: 0; }
 .chat-pick-box { flex: none; margin: 0; }
+
+.app-shell.is-narrow .tchat { height: calc(100vh - 56px - 64px - 2 * var(--space-4) - 28px); }
+.app-shell.is-narrow .tchat-foot { display: none; }

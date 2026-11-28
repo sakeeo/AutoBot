@@ -75,8 +75,8 @@ describe('ConnectionPage', () => {
   it('shows the connected state with a logout button', async () => {
     const api = setApi({ getStatus: vi.fn().mockResolvedValue({ state: 'connected' }) })
     render(<ConnectionPage />)
-    fireEvent.click(await screen.findByRole('button', { name: /keluar dari whatsapp/i }))
-    fireEvent.click(screen.getByRole('button', { name: 'Ya, keluar' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Putuskan WhatsApp' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ya, Putuskan WhatsApp' }))
     expect(api.logout).toHaveBeenCalled()
   })
 })
@@ -253,7 +253,8 @@ describe('LogPage', () => {
     })
     render(<LogPage />)
     expect(await screen.findByText(/berapa harga kopi/)).toBeTruthy()
-    expect(screen.getByText(/replied:extractive/)).toBeTruthy()
+    expect(screen.getByText('Dibalas dari dokumen')).toBeTruthy()
+    expect(screen.getByTitle('replied:extractive')).toBeTruthy()
   })
 })
 
@@ -265,7 +266,7 @@ describe('applyTheme', () => {
     expect(document.documentElement.dataset.bsTheme).toBe('light')
   })
   it('follows prefers-color-scheme for auto', () => {
-    window.matchMedia = ((q: string) => ({ matches: true, media: q, addEventListener() {}, removeEventListener() {} })) as any
+    window.matchMedia = ((q: string) => ({ matches: q.includes('prefers-color-scheme: dark'), media: q, addEventListener() {}, removeEventListener() {} })) as any
     applyTheme('auto')
     expect(document.documentElement.dataset.bsTheme).toBe('dark')
   })
@@ -281,9 +282,9 @@ describe('LogPage layout', () => {
     setApi({ getLog: vi.fn().mockResolvedValue(rows(2)) })
     render(<LogPage />)
     await screen.findByText('pesan 0')
-    expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(1)
-    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Waktu', 'Keputusan', 'Skor', 'Sumber', 'Pesan'])
-    expect(screen.getByText('replied:ai').className).toMatch(/badge/)
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Waktu', 'Pelanggan', 'Keputusan', 'Skor', 'Sumber', 'Pesan'])
+    expect(screen.getByText('Dibalas AI').className).toMatch(/badge/)
     expect(screen.getByText('0.50').closest('td')!.className).toMatch(/text-end/)
   })
   it('pages through the log ten rows at a time', async () => {
@@ -315,7 +316,7 @@ describe('TestPanel layout', () => {
     let reject!: (e: Error) => void
     setApi({ testQuestion: vi.fn().mockReturnValue(new Promise((_, r) => { reject = r })) })
     render(<TestPanel />)
-    expect(screen.getAllByRole('heading', { level: 2 })).toHaveLength(1)
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
     fireEvent.change(screen.getByLabelText(/pertanyaan/i), { target: { value: 'halo' } })
     fireEvent.click(screen.getByRole('button', { name: /uji/i }))
     expect((await screen.findByRole('status')).textContent).toMatch(/menguji/i)

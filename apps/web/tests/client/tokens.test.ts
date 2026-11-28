@@ -28,17 +28,18 @@ const contrast = (a: string, b: string): number => {
   return (hi + 0.05) / (lo + 0.05)
 }
 
-describe('design tokens (design-guide §11)', () => {
-  it('uses the guide values exactly', () => {
+describe('design tokens (Figma "AutoBot – UI v1" on the design-guide identity)', () => {
+  it('uses the design values exactly', () => {
     const expected: Record<string, string> = {
       '--color-primary': '#1F4D38', '--color-primary-dark': '#163A29', '--color-primary-light': '#E1E5CF',
-      '--color-background': '#EDE6D6', '--color-surface': '#F7F3EA', '--color-border': '#D9CFB8',
-      '--color-text-primary': '#1C2A22', '--color-text-secondary': '#8A8570',
+      '--color-background': '#F5F1EC', '--color-surface': '#FFFFFF', '--color-border': '#D3CEC6',
+      '--color-text-primary': '#111111', '--color-text-secondary': '#8A8570',
       '--color-success': '#7FA33A', '--color-warning': '#D9A22E', '--color-danger': '#F24A2B',
-      '--radius-control': '6px', '--radius-card': '10px',
+      '--color-ink': '#111111', '--color-sidebar-bg': '#1F4D38',
+      '--radius-control': '8px', '--radius-card': '12px',
       '--space-1': '4px', '--space-2': '8px', '--space-3': '12px', '--space-4': '16px',
       '--space-5': '20px', '--space-6': '24px', '--space-8': '32px',
-      '--shadow-card': '0 2px 8px rgba(60, 50, 20, 0.08)'
+      '--shadow-card': 'none'
     }
     for (const [k, v] of Object.entries(expected)) expect(light[k]?.toUpperCase(), k).toBe(v.toUpperCase())
   })
@@ -115,7 +116,17 @@ describe('design tokens (design-guide §11)', () => {
       expect(hit!.body, sel).toMatch(/box-shadow:\s*none/)
     }
     const input = rules.find((r) => r.sel.split(',').map((s) => s.trim()).includes('.form-control:focus'))!
-    expect(input.body).toMatch(/background-color:\s*var\(--color-surface\)/)
+    expect(input.body).toMatch(/background-color:\s*var\(--color-input-bg\)/)
+  })
+
+  it('keeps inputs and the vermilion call to action readable (fields never look transparent)', () => {
+    for (const t of [light, { ...light, ...dark }]) {
+      expect(contrast(t['--color-input-border'], t['--color-surface']), 'input border on card').toBeGreaterThanOrEqual(3)
+      expect(contrast(t['--color-input-border'], t['--color-input-bg']), 'input border on field').toBeGreaterThanOrEqual(3)
+      expect(contrast(t['--color-cta-text'], t['--color-danger-soft']), 'vermilion text on its band').toBeGreaterThanOrEqual(4.5)
+      expect(contrast('#FFFFFF', t['--color-ink']), 'primary button text').toBeGreaterThanOrEqual(4.5)
+    }
+    expect(contrast(light['--color-on-cta'], light['--color-cta']), 'white on vermilion button').toBeGreaterThanOrEqual(4.5)
   })
 
   it('shows a visible keyboard focus indicator', () => {

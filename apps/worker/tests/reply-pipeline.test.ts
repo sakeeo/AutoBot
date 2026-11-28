@@ -25,7 +25,7 @@ class FakeGateway implements WaGateway {
   onStatus(_cb: (s: ConnStatus) => void): void {}
   async connect(): Promise<void> {}
   async logout(): Promise<void> {}
-  selfNumber(): string | null { return '6285119308345' }
+  selfNumber(): string | null { return '6281200009999' }
   async onWhatsApp(numbers: string[]): Promise<{ number: string; jid: string | null; exists: boolean }[]> {
     return numbers.map((number) => ({ number, jid: `${number}@s.whatsapp.net`, exists: true }))
   }
@@ -724,7 +724,7 @@ describe('ReplyPipeline bot switch and the chat with our own number', () => {
   })
   it('ignores the chat with our own number completely: not recorded, not answered, no takeover', async () => {
     const t = setup()
-    const own = '6285119308345@s.whatsapp.net'
+    const own = '6281200009999@s.whatsapp.net'
     expect(await t.pipeline.handle(t.msg({ chatId: own, sender: own }))).toEqual({ kind: 'ignored', why: 'self' })
     expect(await t.pipeline.handle(t.msg({ chatId: own, sender: own, fromMe: true, text: 'catatan untuk diri sendiri' })))
       .toEqual({ kind: 'ignored', why: 'self' })
@@ -736,7 +736,7 @@ describe('ReplyPipeline bot switch and the chat with our own number', () => {
   })
   it('also recognises the multi-device form of our own jid', async () => {
     const t = setup()
-    const own = '6285119308345:12@s.whatsapp.net'
+    const own = '6281200009999:12@s.whatsapp.net'
     expect(await t.pipeline.handle(t.msg({ chatId: own, sender: own }))).toEqual({ kind: 'ignored', why: 'self' })
   })
 })

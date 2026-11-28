@@ -20,7 +20,7 @@ import type { Ctx, WorkerPort } from '../src/server/auth/types'
 import { hotp, base32Decode, stepAt } from '../src/server/auth/totp'
 
 export class FakeWorker implements WorkerPort {
-  self: string | null = '6285119308345'
+  self: string | null = '6281200009999'
   sent: { to: string; kind: string; code?: string; username?: string; last4?: string }[] = []
   failWith: string | null = null
   down = false

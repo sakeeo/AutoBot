@@ -43,6 +43,7 @@ export const CHANNELS = {
   setBotEnabled: 'bot:set-enabled',
   listChats: 'messages:chats',
   getThread: 'messages:thread',
+  getChatInfo: 'messages:chat-info',
   gsCredentialStatus: 'gs:credential-status',
   gsSaveCredential: 'gs:save-credential',
   gsDeleteCredential: 'gs:delete-credential',

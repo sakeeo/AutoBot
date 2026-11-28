@@ -37,7 +37,7 @@ describe('MessagesPage', () => {
     setApi([])
     render(<MessagesPage />)
     await screen.findByText(/belum ada pesan/i)
-    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent?.trim())).toEqual(['Pesan'])
+    expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent?.trim())).toEqual(['Pesan'])
   })
 
   it('shows a loading state, an error state with retry, and an empty state', async () => {
@@ -63,10 +63,10 @@ describe('MessagesPage', () => {
     expect(within(list).getByText('6281111')).toBeTruthy()
     expect(within(list).getByText('berapa harga?')).toBeTruthy()
     expect(within(list).getByText('Grup')).toBeTruthy()
-    expect(within(list).getByText('3 pesan')).toBeTruthy()
+    expect(within(list).getByText(/3 pesan/)).toBeTruthy()
   })
 
-  it('opens a chat and labels each bubble in words', async () => {
+  it('opens a chat: the customer on the left, bot and admin on the right, admin replies labelled', async () => {
     const m1 = fm({ direction: 'in', text: 'harga kopi?' })
     const m2 = fm({ direction: 'out', text: 'Rp25.000' })
     const m3 = fm({ direction: 'human', text: 'saya admin' })
@@ -76,8 +76,9 @@ describe('MessagesPage', () => {
     await waitFor(() => expect(api.getThread).toHaveBeenCalledWith(A))
     const thread = await screen.findByRole('log', { name: 'Percakapan' })
     expect(within(thread).getByText('harga kopi?')).toBeTruthy()
-    expect(within(thread).getByText('Pelanggan')).toBeTruthy()
-    expect(within(thread).getByText('Bot')).toBeTruthy()
+    expect(within(thread).getByText('harga kopi?').closest('.bubble')!.className).toMatch(/bubble-in/)
+    expect(within(thread).getByText('Rp25.000').closest('.bubble')!.className).toMatch(/bubble-out/)
+    expect(within(thread).getByText('saya admin').closest('.bubble')!.className).toMatch(/bubble-human/)
     expect(within(thread).getByText('Admin')).toBeTruthy()
   })
 
@@ -136,13 +137,13 @@ describe('MessagesPage', () => {
     await emit(next)
     await emit(next)
     expect(within(thread).getAllByText('sekali saja')).toHaveLength(1)
-    expect(screen.getByText('2 pesan')).toBeTruthy()
+    expect(screen.getByText(/2 pesan/)).toBeTruthy()
   })
 
-  it('marks live updates and stops listening when the page closes', async () => {
+  it('stops listening for live updates when the page closes', async () => {
     setApi([])
     const { unmount } = render(<MessagesPage />)
-    expect((await screen.findByText('Langsung')).className).toMatch(/badge/)
+    await screen.findByText(/belum ada pesan/i)
     unmount()
     expect(unsub).toHaveBeenCalledTimes(1)
   })
@@ -185,16 +186,28 @@ describe('MessagesPage: stepping in', () => {
   const openA = async () => { fireEvent.click(await screen.findByText('6281111')) }
 
   it('shows who handles a chat in the list and takes over with one click', async () => {
-    const api = withApi('menunggu_admin')
+    const api = withApi('bot')
     render(<MessagesPage />)
-    expect((await screen.findAllByText('Menunggu admin')).length).toBeGreaterThan(1)
+    expect((await screen.findAllByText('Bot menjawab')).length).toBeGreaterThan(0)
     await openA()
-    expect(screen.queryByLabelText('Balasan admin')).toBeNull()
+    expect(screen.getByLabelText('Balasan admin')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: /^ambil alih$/i }))
     await waitFor(() => expect(api.takeOverChat).toHaveBeenCalledWith(A))
-    expect((await screen.findAllByText('Ditangani manusia')).length).toBeGreaterThan(0)
-    expect(screen.getByLabelText('Balasan admin')).toBeTruthy()
+    expect((await screen.findAllByText('Diambil alih')).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: /kembalikan ke bot/i })).toBeTruthy()
+  })
+
+  it('a chat handed over to an admin shows why, with the need, product and stage, and can go back to the bot', async () => {
+    const api = withApi('menunggu_admin', {
+      getChatInfo: vi.fn().mockResolvedValue({ handling: 'menunggu_admin', handoffReason: 'minta nego harga', handoffAt: 1, stage: 'penawaran', lead: { kebutuhan: 'landing page' }, product: 'Landing Page Starter' })
+    })
+    render(<MessagesPage />)
+    expect((await screen.findAllByText('Butuh admin')).length).toBeGreaterThan(1)
+    await openA()
+    const card = await screen.findByText(/diserahkan ke admin: minta nego harga/i)
+    expect(card.parentElement!.textContent).toMatch(/Kebutuhan: landing page · Produk: Landing Page Starter · Tahap: penawaran/)
+    fireEvent.click(screen.getByRole('button', { name: /kembalikan ke bot/i }))
+    await waitFor(() => expect(api.handBackChat).toHaveBeenCalledWith(A))
   })
   it('hands the chat back to the bot', async () => {
     const api = withApi('manusia')
@@ -202,8 +215,7 @@ describe('MessagesPage: stepping in', () => {
     await openA()
     fireEvent.click(await screen.findByRole('button', { name: /kembalikan ke bot/i }))
     await waitFor(() => expect(api.handBackChat).toHaveBeenCalledWith(A))
-    await waitFor(() => expect(screen.queryByLabelText('Balasan admin')).toBeNull())
-    expect(screen.getByRole('button', { name: /^ambil alih$/i })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: /^ambil alih$/i })).toBeTruthy()
   })
   it('sends a reply typed in the app and clears the box; Shift+Enter does not send', async () => {
     const api = withApi('manusia')
@@ -233,7 +245,7 @@ describe('MessagesPage: stepping in', () => {
     fireEvent.click(await screen.findByText('99'))
     expect(screen.queryByRole('button', { name: /^ambil alih$/i })).toBeNull()
     await emit(fm({ direction: 'human', text: 'saya admin' }))
-    await waitFor(() => expect(screen.getAllByText('Ditangani manusia').length).toBeGreaterThan(0))
+    await waitFor(() => expect(screen.getAllByText('Diambil alih').length).toBeGreaterThan(1))
   })
 
   it('filters the list by who handles the chat, with counts; groups only show under Semua', async () => {
@@ -248,9 +260,9 @@ describe('MessagesPage: stepping in', () => {
     const filter = await screen.findByRole('group', { name: 'Filter percakapan' })
     const btn = (name: string) => within(filter).getByRole('button', { name: new RegExp(`^${name}`) })
     expect(btn('Semua').textContent).toBe('Semua4')
-    expect(btn('Ditangani AI').textContent).toBe('Ditangani AI1')
+    expect(btn('Bot\\d').textContent).toBe('Bot1')
     expect(btn('Diambil alih').textContent).toBe('Diambil alih1')
-    expect(btn('Menunggu admin').textContent).toBe('Menunggu admin1')
+    expect(btn('Butuh admin').textContent).toBe('Butuh admin1')
 
     fireEvent.click(btn('Diambil alih'))
     const list = screen.getByRole('list', { name: 'Daftar percakapan' })
@@ -258,7 +270,7 @@ describe('MessagesPage: stepping in', () => {
     expect(within(list).getByText('6283333')).toBeTruthy()
     expect(btn('Diambil alih').getAttribute('aria-pressed')).toBe('true')
 
-    fireEvent.click(btn('Ditangani AI'))
+    fireEvent.click(btn('Bot\\d'))
     expect(within(screen.getByRole('list', { name: 'Daftar percakapan' })).getByText('6281111')).toBeTruthy()
     expect(screen.queryByText('99')).toBeNull()
 
@@ -273,11 +285,11 @@ describe('MessagesPage: stepping in', () => {
     const filter = await screen.findByRole('group', { name: 'Filter percakapan' })
     fireEvent.click(within(filter).getByRole('button', { name: /^Diambil alih/ }))
     expect(screen.getByText(/tidak ada percakapan di filter ini/i)).toBeTruthy()
-    fireEvent.click(within(filter).getByRole('button', { name: /^Ditangani AI/ }))
+    fireEvent.click(within(filter).getByRole('button', { name: /^Bot\d/ }))
     fireEvent.click(screen.getByText('6281111'))
     fireEvent.click(screen.getByRole('button', { name: /^ambil alih$/i }))
     await waitFor(() => expect(within(filter).getByRole('button', { name: /^Diambil alih/ }).textContent).toBe('Diambil alih1'))
-    expect(within(filter).getByRole('button', { name: /^Ditangani AI/ }).textContent).toBe('Ditangani AI0')
+    expect(within(filter).getByRole('button', { name: /^Bot\d/ }).textContent).toBe('Bot0')
   })
 
   describe('selecting many chats', () => {
@@ -335,7 +347,7 @@ describe('MessagesPage: stepping in', () => {
       const filter = screen.getByRole('group', { name: 'Filter percakapan' })
       fireEvent.click(within(filter).getByRole('button', { name: /^Diambil alih/ }))
       expect((screen.getByLabelText('Pilih semua (0)') as HTMLInputElement).disabled).toBe(true)
-      fireEvent.click(within(filter).getByRole('button', { name: /^Ditangani AI/ }))
+      fireEvent.click(within(filter).getByRole('button', { name: /^Bot\d/ }))
       fireEvent.click(screen.getByLabelText('Pilih semua (2)'))
       expect(screen.getByText('2 dipilih')).toBeTruthy()
       fireEvent.click(screen.getByLabelText('Pilih semua (2)'))

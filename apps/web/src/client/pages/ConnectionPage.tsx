@@ -20,6 +20,26 @@ export function ConnectionPage() {
   const [failed, setFailed] = useState(false)
   const [agreed, setAgreed] = useState(false)
   const [qrSrc, setQrSrc] = useState<string | null>(null)
+  const [selfNumber, setSelfNumber] = useState<string | null>(null)
+  const [botOn, setBotOn] = useState<boolean | null>(null)
+  const [switchError, setSwitchError] = useState<string | null>(null)
+
+  useEffect(() => {
+    window.api.getBotEnabled?.().then(setBotOn).catch(() => undefined)
+  }, [])
+  useEffect(() => {
+    if (status.state !== 'connected') { setSelfNumber(null); return }
+    window.api.getSelfNumber?.().then(setSelfNumber).catch(() => undefined)
+  }, [status.state])
+
+  async function toggleBot(): Promise<void> {
+    setSwitchError(null)
+    try {
+      setBotOn(await window.api.setBotEnabled(!botOn))
+    } catch (e) {
+      if ((e as { code?: string }).code !== 'CANCELLED') setSwitchError('Gagal mengubah status bot.')
+    }
+  }
 
   const load = useCallback(() => {
     setFailed(false)
@@ -46,46 +66,67 @@ export function ConnectionPage() {
 
   return (
     <div>
-      <PageHeader icon="bi-whatsapp" title="Koneksi WhatsApp"
-        subtitle="Hubungkan nomor WhatsApp yang dipakai bot."
-        actions={<StatusBadge tone={TONE[status.state]}>{id.state[status.state]}</StatusBadge>} />
-
+      <PageHeader title="Connector" subtitle="Koneksi WhatsApp bot, saklar bot, dan status layanan." />
       {failed && <div className="mb-3"><ErrorState message="Gagal memuat status koneksi." onRetry={load} /></div>}
 
-      {status.state !== 'connected' && (
-        <div className="alert alert-warning">
-          <i className="bi bi-exclamation-triangle me-2" aria-hidden="true" />{id.risk}
-          <div className="form-check mt-3">
-            <input className="form-check-input" type="checkbox" id="agree" checked={agreed}
-              onChange={(e) => setAgreed(e.target.checked)} />
-            <label className="form-check-label" htmlFor="agree">
-              Saya mengerti risikonya dan memakai nomor yang siap menanggungnya
-            </label>
-          </div>
-        </div>
-      )}
-
-      {qrSrc && (
-        <Card title="Scan untuk menautkan" className="mb-3" aria-label="QR WhatsApp">
-          <div className="text-center">
-            <img src={qrSrc} alt="QR WhatsApp" width={260} height={260} />
-            <p className="small text-body-secondary mb-0 mt-2">
-              WhatsApp → Perangkat tertaut → Tautkan perangkat, lalu scan kode ini.
-            </p>
-          </div>
+      <div className="connector-grid">
+        <Card title="WhatsApp" aria-label="WhatsApp">
+          <StatusBadge tone={TONE[status.state]}>{id.state[status.state]}</StatusBadge>
+          {status.state === 'connected' ? (
+            <>
+              <div className="connector-number">
+                <small>Nomor bot</small>
+                <strong>{selfNumber ? `+${selfNumber}` : '—'}</strong>
+              </div>
+              <ConfirmButton label="Putuskan" confirmLabel="Ya, putuskan" ariaLabel="Putuskan WhatsApp" className="btn btn-outline-danger"
+                onConfirm={() => window.api.logout()}>
+                Putuskan
+              </ConfirmButton>
+            </>
+          ) : (
+            <>
+              <div className="alert alert-warning small mt-3">
+                {id.risk}
+                <div className="form-check mt-2 mb-0">
+                  <input className="form-check-input" type="checkbox" id="agree" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
+                  <label className="form-check-label" htmlFor="agree">Saya mengerti risikonya dan memakai nomor yang siap menanggungnya</label>
+                </div>
+              </div>
+              {qrSrc && (
+                <div className="connector-qr" aria-label="QR WhatsApp">
+                  <img src={qrSrc} alt="QR WhatsApp" width={220} height={220} />
+                  <small>WhatsApp → Perangkat tertaut → Tautkan perangkat, lalu pindai kode ini.</small>
+                </div>
+              )}
+              <button className="btn btn-primary" disabled={!agreed || busy} onClick={() => window.api.connect()}>
+                {status.state === 'waiting_qr' ? 'Menunggu pindai…' : 'Hubungkan WhatsApp'}
+              </button>
+            </>
+          )}
         </Card>
-      )}
 
-      {status.state === 'connected' ? (
-        <ConfirmButton label="Keluar dari WhatsApp" confirmLabel="Ya, keluar" className="btn btn-outline-danger"
-          onConfirm={() => window.api.logout()}>
-          <><i className="bi bi-box-arrow-right me-1" aria-hidden="true" />Keluar dari WhatsApp</>
-        </ConfirmButton>
-      ) : (
-        <button className="btn btn-primary" disabled={!agreed || busy} onClick={() => window.api.connect()}>
-          <i className="bi bi-link-45deg me-1" aria-hidden="true" />Hubungkan WhatsApp
-        </button>
-      )}
+        <Card title="Status bot" aria-label="Status bot">
+          <div className="connector-switch">
+            <span>
+              <strong>Bot membalas pelanggan</strong>
+              <small>{botOn ? 'Aktif: pesan pelanggan dijawab otomatis.' : 'Matikan untuk menjeda semua balasan otomatis.'}</small>
+            </span>
+            <div className="form-check form-switch m-0">
+              <input className="form-check-input" type="checkbox" role="switch" id="bot-switch" aria-label="Bot membalas pelanggan"
+                checked={!!botOn} disabled={botOn === null} onChange={() => void toggleBot()} />
+            </div>
+          </div>
+          {switchError && <div className="text-danger small mt-2" role="alert">{switchError}</div>}
+        </Card>
+      </div>
+
+      <Card title="Layanan" aria-label="Layanan">
+        <div className="d-flex flex-wrap gap-2 mb-2">
+          <StatusBadge tone="success">Web: aktif</StatusBadge>
+          <StatusBadge tone={failed ? 'danger' : 'success'}>{failed ? 'Worker: tidak terjangkau' : 'Worker: aktif'}</StatusBadge>
+        </div>
+        <small className="text-body-secondary">Bila worker mati, panel tetap bisa dibuka, tetapi bot tidak membalas sampai worker hidup lagi.</small>
+      </Card>
     </div>
   )
 }

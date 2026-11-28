@@ -30,7 +30,7 @@ export function BrandPage() {
 
   return (
     <div>
-      <PageHeader icon="bi-bullseye" title="Brand & Konversi"
+      <PageHeader title="Brand & Konversi"
         subtitle="Atur siapa bot ini dan ke mana pelanggan diarahkan. Perubahan baru dipakai bot setelah Anda menekan Terapkan." />
       <div className="row g-3">
         <div className="col-xl-7">

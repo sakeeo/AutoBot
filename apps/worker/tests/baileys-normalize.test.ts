@@ -83,8 +83,8 @@ describe('own messages', () => {
 
 describe('account helpers', () => {
   it('extracts the digits of the linked number from a device jid', () => {
-    expect(selfNumberFromJid('6285119308345:12@s.whatsapp.net')).toBe('6285119308345')
-    expect(selfNumberFromJid('6285119308345@s.whatsapp.net')).toBe('6285119308345')
+    expect(selfNumberFromJid('6281200009999:12@s.whatsapp.net')).toBe('6281200009999')
+    expect(selfNumberFromJid('6281200009999@s.whatsapp.net')).toBe('6281200009999')
     expect(selfNumberFromJid(undefined)).toBeNull()
   })
   it('builds a user jid from any phone number format', () => {

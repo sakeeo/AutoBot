@@ -4,7 +4,7 @@ import type { ConnStatus, IncomingMessage } from '@autobot/contracts/types'
 /** A WhatsApp gateway that talks to nobody: tests drive it and read what the bot sent. */
 export class FakeGateway implements WaGateway {
   sent: { chatId: string; text: string }[] = []
-  self: string | null = '6285119308345'
+  self: string | null = '6281200009999'
   /** Numbers that exist on WhatsApp; empty means every number exists. */
   registered: Set<string> | null = null
   failSend = false

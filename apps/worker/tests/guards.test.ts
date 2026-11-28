@@ -4,12 +4,12 @@ import {
   removeCtaSentences
 } from '../src/policy/guards'
 
-const BOT = '6285119308345'
+const BOT = '6281200009999'
 
 describe('containsNumber', () => {
   it('matches the number in every common format', () => {
     for (const t of [
-      'hubungi 0851-1930-8345 ya', 'wa +62 851 1930 8345', 'chat 6285119308345', 'https://wa.me/6285119308345'
+      'hubungi 0812-0000-9999 ya', 'wa +62 812 0000 9999', 'chat 6281200009999', 'https://wa.me/6281200009999'
     ]) expect(containsNumber(t, BOT), t).toBe(true)
   })
   it('does not match other numbers or prices', () => {
@@ -20,7 +20,7 @@ describe('containsNumber', () => {
 
 describe('removeSelfNumber', () => {
   it('removes the whole sentence that carries the number', () => {
-    const r = removeSelfNumber('Boleh. Hubungi WhatsApp 0851-1930-8345 ya. Terima kasih', BOT)
+    const r = removeSelfNumber('Boleh. Hubungi WhatsApp 0812-0000-9999 ya. Terima kasih', BOT)
     expect(r).toEqual({ text: 'Boleh. Terima kasih', removed: true })
   })
   it('leaves clean text untouched', () => {
@@ -96,7 +96,7 @@ describe('removeCtaSentences', () => {
 describe('sanitizeChunk', () => {
   it('drops lines with the bot number and website call-to-actions, keeps facts', () => {
     const out = sanitizeChunk(
-      'Harga Rp1.500.000 per tahun\nTanya lewat WhatsApp 0851-1930-8345\nKlik tombol Pesan\nIsi formulir di halaman ini',
+      'Harga Rp1.500.000 per tahun\nTanya lewat WhatsApp 0812-0000-9999\nKlik tombol Pesan\nIsi formulir di halaman ini',
       BOT
     )
     expect(out).toBe('Harga Rp1.500.000 per tahun')

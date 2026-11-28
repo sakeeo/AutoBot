@@ -4,7 +4,7 @@ import {
   type BrandProfile, type ValidateCtx
 } from '@autobot/contracts/brand'
 
-const ctx: ValidateCtx = { botNumber: '6285119308345', productCount: 0 }
+const ctx: ValidateCtx = { botNumber: '6281200009999', productCount: 0 }
 const clone = <T,>(x: T): T => structuredClone(x)
 const toko = (): BrandProfile => clone(PRESETS.toko_online)
 const jasa = (): BrandProfile => clone(PRESETS.jasa_agensi)
@@ -18,9 +18,9 @@ const errors = (p: BrandProfile, c = ctx) => validateProfile(p, c).filter((i) =>
 
 describe('normalizeNumber', () => {
   it('keeps digits only and turns a leading 0 into 62', () => {
-    expect(normalizeNumber('0851-1930-8345')).toBe('6285119308345')
-    expect(normalizeNumber('+62 851 1930 8345')).toBe('6285119308345')
-    expect(normalizeNumber('6285119308345')).toBe('6285119308345')
+    expect(normalizeNumber('0812-0000-9999')).toBe('6281200009999')
+    expect(normalizeNumber('+62 812 0000 9999')).toBe('6281200009999')
+    expect(normalizeNumber('6281200009999')).toBe('6281200009999')
     expect(normalizeNumber('')).toBe('')
   })
 })
@@ -50,7 +50,7 @@ describe('presets', () => {
 
 describe('validateProfile', () => {
   it('errors when an admin number equals the bot number in any format', () => {
-    for (const n of ['6285119308345', '0851-1930-8345', '+62 851 1930 8345']) {
+    for (const n of ['6281200009999', '0812-0000-9999', '+62 812 0000 9999']) {
       const p = jasa()
       p.admins = [admin({ number: n })]
       expect(errors(p).some((i) => i.field.startsWith('admins'))).toBe(true)

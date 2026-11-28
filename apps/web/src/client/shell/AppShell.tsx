@@ -1,12 +1,14 @@
 'use client'
 import { usePathname, useRouter } from 'next/navigation'
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { SettingsProvider, useSettings } from '../settings-context'
 import { applyTheme } from '../theme'
-import { crumbsOf, groupOf, keyOfPath } from '../nav'
+import { keyOfPath } from '../nav'
 import { attentionNotification, incomingNotification } from '../notify'
 import { installApi, SESSION_EXPIRED_EVENT } from '../api-client'
 import { Sidebar } from './Sidebar'
+import { useNarrow } from '../useNarrow'
+import { BottomNav } from './BottomNav'
 import { TopBar } from './TopBar'
 import { StepUpDialog } from './StepUpDialog'
 
@@ -14,19 +16,6 @@ installApi() // before any page below runs its first effect
 
 const SESSION_CHECK_MS = 60_000
 const WARN_BEFORE_MS = 10 * 60_000
-
-/** True below the desktop breakpoint, where the sidebar becomes a drawer. Starts false so the server and the browser agree. */
-function useNarrow(): boolean {
-  const [narrow, setNarrow] = useState(false)
-  useEffect(() => {
-    const mq = window.matchMedia('(max-width: 991.98px)')
-    const on = (): void => setNarrow(mq.matches)
-    on()
-    mq.addEventListener('change', on)
-    return () => mq.removeEventListener('change', on)
-  }, [])
-  return narrow
-}
 
 /** Sends the person to the login page the moment the session is gone, and warns before the 12-hour limit. */
 function useSessionWatch(): { endsSoonAt: number | null } {
@@ -69,11 +58,8 @@ function useBrowserNotifications(enabled: boolean): void {
 function Shell({ username, children }: { username: string; children: ReactNode }) {
   const pathname = usePathname()
   const page = keyOfPath(pathname)
-  const [settingsOpen, setSettingsOpen] = useState(groupOf(page) === 'settings')
-  const [drawerOpen, setDrawerOpen] = useState(false)
   const [settings] = useSettings()
   const narrow = useNarrow()
-  const menuRef = useRef<HTMLButtonElement>(null)
   const { endsSoonAt } = useSessionWatch()
   useBrowserNotifications(!!settings?.notifyIncoming)
 
@@ -87,37 +73,11 @@ function Shell({ username, children }: { username: string; children: ReactNode }
     return () => mq.removeEventListener('change', on)
   }, [settings])
 
-  const closeDrawer = useCallback(() => setDrawerOpen(false), [])
-  // The page behind a modal drawer is inert, so focus goes back to the menu button only after it re-enables.
-  const wasOpen = useRef(false)
-  useEffect(() => {
-    if (wasOpen.current && !drawerOpen) menuRef.current?.focus()
-    wasOpen.current = drawerOpen
-  }, [drawerOpen])
-  useEffect(() => {
-    if (!drawerOpen) return
-    const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') closeDrawer() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [drawerOpen, closeDrawer])
-  useEffect(() => { if (!narrow) setDrawerOpen(false) }, [narrow])
-  useEffect(() => { if (groupOf(page) === 'settings') setSettingsOpen(true) }, [page])
-
-  const sidebar = (drawer: boolean) => (
-    <Sidebar page={page} onNavigate={drawer ? closeDrawer : undefined} settingsOpen={settingsOpen}
-      onToggleSettings={() => setSettingsOpen((o) => !o)} drawer={drawer} />
-  )
   return (
-    <div className="app-shell">
-      {!narrow && sidebar(false)}
-      {narrow && drawerOpen && (
-        <>
-          <div className="app-backdrop" data-testid="drawer-backdrop" onClick={closeDrawer} />
-          {sidebar(true)}
-        </>
-      )}
-      <div className="app-main" inert={drawerOpen}>
-        <TopBar crumbs={crumbsOf(page)} showMenuButton={narrow} onMenu={() => setDrawerOpen(true)} menuRef={menuRef} username={username} />
+    <div className={`app-shell${narrow ? ' is-narrow' : ''}`}>
+      {!narrow && <Sidebar page={page} />}
+      <div className="app-main">
+        <TopBar page={page} narrow={narrow} username={username} />
         {endsSoonAt && (
           <div className="announcement-banner" role="alert">
             <i className="bi bi-hourglass-split" aria-hidden="true" />
@@ -126,6 +86,7 @@ function Shell({ username, children }: { username: string; children: ReactNode }
         )}
         <main className="app-content">{children}</main>
       </div>
+      {narrow && <BottomNav page={page} />}
       <StepUpDialog />
     </div>
   )

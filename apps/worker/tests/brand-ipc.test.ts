@@ -10,7 +10,7 @@ import type { ConnStatus, IncomingMessage } from '@autobot/contracts/types'
 import { PRESETS, type BrandProfile } from '@autobot/contracts/brand'
 
 const MONDAY_10_WITA = Date.UTC(2026, 10, 16, 2, 0)
-const BOT = '6285119308345'
+const BOT = '6281200009999'
 
 class FakeGateway implements WaGateway {
   sent: { chatId: string; text: string }[] = []
@@ -80,7 +80,7 @@ describe('getBrand / saveBrandDraft / applyBrand', () => {
   it('apply fails when an admin number is the bot number', async () => {
     const t = setup()
     const p = named('Kerabat Koding')
-    p.admins = [{ id: 'a', name: 'Bot', number: '0851-1930-8345', notifyWhatsapp: true }]
+    p.admins = [{ id: 'a', name: 'Bot', number: '0812-0000-9999', notifyWhatsapp: true }]
     await t.handlers.saveBrandDraft(p)
     const r = await t.handlers.applyBrand()
     expect(r.ok).toBe(false)
@@ -166,7 +166,7 @@ describe('previewChat', () => {
   })
   it('shows what the guards removed', async () => {
     const t = setup()
-    t.replies.push(agentOut({ reply_parts: ['Harga Rp1,5 juta.', 'Hubungi 0851-1930-8345 ya.'] }))
+    t.replies.push(agentOut({ reply_parts: ['Harga Rp1,5 juta.', 'Hubungi 0812-0000-9999 ya.'] }))
     const r = await t.handlers.previewChat({ draft: true, messages: ['info paket website umkm'] })
     if (!r.ok) throw new Error('expected ok')
     expect(r.turns[0].removed.numbers).toBe(true)

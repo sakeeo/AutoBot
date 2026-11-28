@@ -1,9 +1,8 @@
 'use client'
 import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import React, { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { postJson } from '../api-client'
 import { useSettings } from '../settings-context'
-import { Card } from '../ui/Card'
 import { ConfirmButton } from '../ui/ConfirmButton'
 import { PageHeader } from '../ui/PageHeader'
 import { QrImage } from '../ui/QrImage'
@@ -17,6 +16,26 @@ const getJson = async (path: string): Promise<{ ok: boolean; data: any }> => {
   return { ok: r.ok, data: await r.json().catch(() => null) }
 }
 const when = (ms: number): string => new Date(ms).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })
+
+/** One line of the security list (Figma): what it is, its state, and one button that opens the form below it. */
+function SecRow({ title, hint, action, children, defaultOpen = false }: { title: string; hint?: string; action?: string; children?: React.ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <li className="sec-row">
+      <section aria-label={title}>
+      <div className="sec-head">
+        <span className="sec-text"><strong>{title}</strong>{hint && <small>{hint}</small>}</span>
+        {action && children && (
+          <button type="button" className="btn btn-outline-secondary sec-btn" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+            {open ? 'Tutup' : action}
+          </button>
+        )}
+      </div>
+      {(open || !action) && children && <div className="sec-body">{children}</div>}
+      </section>
+    </li>
+  )
+}
 
 function Notice({ note }: { note: Note }) {
   return note ? <div className={`alert alert-${note.kind} py-2`} role={note.kind === 'danger' ? 'alert' : 'status'}>{note.text}</div> : null
@@ -50,7 +69,7 @@ function Devices() {
     router.replace('/login')
   }
   return (
-    <Card title="Perangkat yang sedang masuk" icon="bi-laptop" className="mb-3">
+    <SecRow title="Sesi aktif" hint={`${devices.length} perangkat sedang masuk`} action="Lihat">
       <Notice note={note} />
       <ul className="list-group list-group-flush mb-3">
         {devices.map((d) => (
@@ -66,9 +85,9 @@ function Devices() {
         ))}
       </ul>
       <ConfirmButton label="Keluar dari semua perangkat" confirmLabel="Ya, keluar semua" className="btn btn-outline-danger" onConfirm={all}>
-        <i className="bi bi-box-arrow-right me-1" aria-hidden="true" />Keluar dari semua perangkat
+        Keluar dari semua perangkat
       </ConfirmButton>
-    </Card>
+    </SecRow>
   )
 }
 
@@ -88,7 +107,7 @@ function ChangePassword() {
     } else setNote({ kind: 'danger', text: r.data?.message ?? 'Gagal mengganti password.' })
   }
   return (
-    <Card title="Ganti password" icon="bi-key" className="mb-3">
+    <SecRow title="Password" hint="Minimal 12 karakter" action="Ganti">
       <form onSubmit={submit} style={{ maxWidth: 420 }}>
         <Notice note={note} />
         <Field id="pw-old" label="Password saat ini" type="password" autoComplete="current-password" value={oldPassword} onChange={setOld} />
@@ -97,7 +116,7 @@ function ChangePassword() {
         <Field id="pw-again" label="Ulangi password baru" type="password" autoComplete="new-password" value={again} onChange={setAgain} />
         <button className="btn btn-primary" disabled={!oldPassword || !totp || !newPassword}>Ganti password</button>
       </form>
-    </Card>
+    </SecRow>
   )
 }
 
@@ -112,7 +131,7 @@ function Recovery({ warn }: { warn: boolean }) {
     else setNote({ kind: 'danger', text: r.data?.message ?? 'Gagal membuat kode pemulihan.' })
   }
   return (
-    <Card title="Kode pemulihan" icon="bi-life-preserver" className="mb-3">
+    <SecRow title="Kode pemulihan" hint={warn ? 'Tinggal sedikit — buat yang baru' : 'Sekali pakai, untuk saat ponsel hilang'} action="Buat ulang" defaultOpen={warn}>
       {warn && <div className="alert alert-warning py-2" role="status">Kode pemulihan Anda tinggal sedikit. Buat yang baru.</div>}
       <p className="small text-body-secondary">Kode ini menggantikan kode authenticator saat Anda kehilangan ponsel, dan sekali pakai. Simpan seperti password. Membuat ulang mematikan semua kode lama.</p>
       {codes ? (
@@ -131,7 +150,7 @@ function Recovery({ warn }: { warn: boolean }) {
           <button className="btn btn-primary" disabled={!password || !totp}>Buat ulang kode pemulihan</button>
         </form>
       )}
-    </Card>
+    </SecRow>
   )
 }
 
@@ -153,7 +172,7 @@ function Authenticator() {
     else setNote({ kind: 'danger', text: r.data?.message ?? 'Kode salah.' })
   }
   return (
-    <Card title="Authenticator" icon="bi-phone" className="mb-3">
+    <SecRow title="Authenticator (TOTP)" hint="Aktif · wajib setiap masuk" action="Daftar ulang">
       <Notice note={note} />
       {enroll ? (
         <form onSubmit={confirm} style={{ maxWidth: 420 }}>
@@ -171,7 +190,7 @@ function Authenticator() {
           <button className="btn btn-outline-primary" disabled={!password || !totp}>Daftarkan authenticator baru</button>
         </form>
       )}
-    </Card>
+    </SecRow>
   )
 }
 
@@ -193,7 +212,7 @@ function OwnerPhone({ current }: { current: string | null }) {
     else setNote({ kind: 'danger', text: r.data?.message ?? 'Kode salah.' })
   }
   return (
-    <Card title="Nomor pemilik" icon="bi-whatsapp" className="mb-3">
+    <SecRow title="Nomor pemilik" hint={current ? `${current} · penerima kode verifikasi` : 'Penerima kode verifikasi'} action="Ganti">
       <p className="small text-body-secondary">Kode verifikasi (setup dan lupa password) dikirim ke nomor ini{current ? <>: <strong>{current}</strong></> : ''}. Harus berbeda dari nomor WhatsApp bot.</p>
       <Notice note={note} />
       {sentTo ? (
@@ -210,7 +229,7 @@ function OwnerPhone({ current }: { current: string | null }) {
           <button className="btn btn-outline-primary" disabled={!phone || !password || !totp}>Kirim kode ke nomor baru</button>
         </form>
       )}
-    </Card>
+    </SecRow>
   )
 }
 
@@ -218,15 +237,15 @@ function Appearance() {
   const [settings, patch] = useSettings()
   if (!settings) return null
   return (
-    <Card title="Tampilan" icon="bi-circle-half" className="mb-3">
-      <label htmlFor="theme" className="form-label">Tema</label>
+    <SecRow title="Tampilan" hint="Terang, gelap, atau ikuti sistem">
+      <label htmlFor="theme" className="visually-hidden">Tema</label>
       <select id="theme" className="form-select" style={{ maxWidth: 260 }} value={settings.theme}
         onChange={(e) => patch({ theme: e.target.value as 'light' | 'dark' | 'auto' })}>
         <option value="auto">Ikuti sistem</option>
         <option value="light">Terang</option>
         <option value="dark">Gelap</option>
       </select>
-    </Card>
+    </SecRow>
   )
 }
 
@@ -235,7 +254,7 @@ function Notifications() {
   const [perm, setPerm] = useState<string>(typeof Notification === 'undefined' ? 'unsupported' : Notification.permission)
   if (!settings) return null
   return (
-    <Card title="Notifikasi di browser" icon="bi-bell" className="mb-3">
+    <SecRow title="Notifikasi di browser" hint="Pemberitahuan saat tab tidak sedang dibuka">
       <div className="form-check form-switch mb-2">
         <input className="form-check-input" type="checkbox" role="switch" id="notify" checked={settings.notifyIncoming}
           onChange={(e) => patch({ notifyIncoming: e.target.checked })} />
@@ -247,8 +266,21 @@ function Notifications() {
         <button className="btn btn-sm btn-outline-secondary" onClick={() => Notification.requestPermission().then(setPerm)}>Izinkan notifikasi</button>
       )}
       {perm === 'granted' && <StatusBadge tone="success">Diizinkan</StatusBadge>}
-    </Card>
+    </SecRow>
   )
+}
+
+/** Figma "Jam server": the authenticator depends on the server clock being right. */
+function ServerClock() {
+  const [clock, setClock] = useState<{ status: string; skewMs: number | null } | null | undefined>(undefined)
+  useEffect(() => {
+    getJson('/api/health').then((r) => setClock(r.data?.worker?.clock ?? null)).catch(() => setClock(null))
+  }, [])
+  const hint = clock === undefined ? 'Memeriksa…'
+    : !clock ? 'Belum bisa diperiksa'
+    : clock.status === 'ok' ? `Sinkron (selisih ${Math.abs(Math.round((clock.skewMs ?? 0) / 1000))} detik)`
+    : 'Jam server melenceng — kode authenticator bisa ditolak'
+  return <SecRow title="Jam server" hint={hint} />
 }
 
 export function SecurityPage() {
@@ -256,14 +288,20 @@ export function SecurityPage() {
   useEffect(() => { getJson('/api/auth/session').then((r) => r.ok && setInfo(r.data)).catch(() => undefined) }, [])
   return (
     <div>
-      <PageHeader icon="bi-shield-lock" title="Keamanan & Umum" subtitle={info?.username ? `Masuk sebagai ${info.username}.` : 'Akun, perangkat, dan verifikasi.'} />
-      <Devices />
-      <ChangePassword />
-      <Recovery warn={!!info?.recoveryWarning} />
-      <Authenticator />
-      <OwnerPhone current={info?.ownerPhone ?? null} />
-      <Appearance />
-      <Notifications />
+      <PageHeader title="Keamanan" subtitle={info?.username ? `Akun pemilik (${info.username}), sesi, dan cadangan.` : 'Akun pemilik, sesi, dan cadangan.'} />
+      <section className="card" aria-label="Pengaturan keamanan">
+        <ul className="sec-list">
+          <ChangePassword />
+          <OwnerPhone current={info?.ownerPhone ?? null} />
+          <Authenticator />
+          <Recovery warn={!!info?.recoveryWarning} />
+          <Devices />
+          <ServerClock />
+          <SecRow title="Cadangan" hint="Dibuat dari server dengan deploy/scripts/backup.sh (lihat panduan operasi)" />
+          <Appearance />
+          <Notifications />
+        </ul>
+      </section>
     </div>
   )
 }

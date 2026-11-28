@@ -81,13 +81,13 @@ tests/                            cermin src/main, src/shared
 **Interfaces:**
 - Consumes: `normalizeNumber` (Task 1).
 - Produces:
-  - `containsNumber(text: string, number: string): boolean` — cocok untuk `0851-1930-8345`, `+62 851 1930 8345`, `6285119308345`, `wa.me/6285119308345`.
+  - `containsNumber(text: string, number: string): boolean` — cocok untuk `0812-0000-9999`, `+62 812 0000 9999`, `6281200009999`, `wa.me/6281200009999`.
   - `removeSelfNumber(text: string, botNumber: string): { text: string; removed: boolean }` — menghapus **kalimat** yang memuat nomor, bukan hanya angkanya.
   - `extractUrls(text: string): string[]`; `stripDisallowedUrls(text: string, allowed: string[]): { text: string; removed: string[] }` — cocok berdasarkan origin+path-prefix dari allowlist; tanpa tautan yang lolos, kalimat pembawa tautan dibuang.
   - `unknownNumbers(reply: string, context: string): string[]` — angka bernilai uang/jumlah (≥ 3 digit atau berawalan `Rp`) di `reply` yang tidak muncul (setelah normalisasi `25.000`/`25000`/`Rp25rb`) di `context`.
   - `sanitizeChunk(text: string, botNumber: string | null): string` — membuang baris yang memuat nomor bot atau frasa ajakan website (`hubungi kami lewat whatsapp`, `klik tombol`, `isi formulir`, `kunjungi halaman`, `tanya lewat whatsapp`, `minta .* lewat whatsapp`).
 
-- [ ] **Step 1: Tes gagal.** `containsNumber('hubungi 0851-1930-8345', '6285119308345')` true untuk keempat format; false untuk nomor lain. `removeSelfNumber('Boleh. Hubungi WhatsApp 0851-1930-8345 ya. Terima kasih', n)` → `'Boleh. Terima kasih'`, `removed: true`. `stripDisallowedUrls` menghapus `http://evil.test/x` dan mempertahankan `https://toko.example/checkout/a?utm=1` bila `https://toko.example/checkout/a` ada di allowlist; URL dengan host mirip (`toko.example.evil.test`) ditolak. `unknownNumbers('Harganya Rp2.000.000', 'Harga Rp1.500.000')` → `['2000000']`; `'Rp1,5 juta'` vs konteks `Rp1,5 juta` → `[]`. `sanitizeChunk` menghapus baris "Tanya lewat WhatsApp 0851…" dan baris "Klik tombol Pesan", mempertahankan baris harga.
+- [ ] **Step 1: Tes gagal.** `containsNumber('hubungi 0812-0000-9999', '6281200009999')` true untuk keempat format; false untuk nomor lain. `removeSelfNumber('Boleh. Hubungi WhatsApp 0812-0000-9999 ya. Terima kasih', n)` → `'Boleh. Terima kasih'`, `removed: true`. `stripDisallowedUrls` menghapus `http://evil.test/x` dan mempertahankan `https://toko.example/checkout/a?utm=1` bila `https://toko.example/checkout/a` ada di allowlist; URL dengan host mirip (`toko.example.evil.test`) ditolak. `unknownNumbers('Harganya Rp2.000.000', 'Harga Rp1.500.000')` → `['2000000']`; `'Rp1,5 juta'` vs konteks `Rp1,5 juta` → `[]`. `sanitizeChunk` menghapus baris "Tanya lewat WhatsApp 0851…" dan baris "Klik tombol Pesan", mempertahankan baris harga.
 - [ ] **Step 2: Run** → FAIL. **Step 3: Implement.** **Step 4: Run** → PASS.
 - [ ] **Step 5: Commit** `feat: output guards and chunk sanitizer`.
 
@@ -177,7 +177,7 @@ tests/                            cermin src/main, src/shared
   - `shouldHandleUpsert(type, fromMe?)` menjadi: `notify` selalu; `append` hanya bila `fromMe === true` (sinyal pengambilalihan manusia, bukan untuk dijawab).
   - `IncomingMessage` tetap; pesan `fromMe` sekarang diteruskan ke callback (pipeline yang memutuskan).
 
-- [ ] **Step 1: Tes gagal.** `splitBubbles(['a','b','c','d'])` → 3 gelembung, gelembung ke-3 `'c d'`; `'**Halo** Kak\n- satu\n# Judul'` dibersihkan tanpa karakter Markdown; `typingMsFor('x'.repeat(10), () => 0)` = 1000 (dijepit), 200 karakter → 6000, 50 karakter dengan `rand = 0.5` = 2500; `shouldHandleUpsert('append', true)` true, `('append', false)` false, `('history', true)` false. `normalizeMessage` untuk `fromMe: true` tetap mengembalikan pesan. `FakeGateway.sendText` di tes pipeline mengembalikan `m-<n>` dan `selfNumber()` `'6285119308345'`.
+- [ ] **Step 1: Tes gagal.** `splitBubbles(['a','b','c','d'])` → 3 gelembung, gelembung ke-3 `'c d'`; `'**Halo** Kak\n- satu\n# Judul'` dibersihkan tanpa karakter Markdown; `typingMsFor('x'.repeat(10), () => 0)` = 1000 (dijepit), 200 karakter → 6000, 50 karakter dengan `rand = 0.5` = 2500; `shouldHandleUpsert('append', true)` true, `('append', false)` false, `('history', true)` false. `normalizeMessage` untuk `fromMe: true` tetap mengembalikan pesan. `FakeGateway.sendText` di tes pipeline mengembalikan `m-<n>` dan `selfNumber()` `'6281200009999'`.
 - [ ] **Step 2: Run** → FAIL. **Step 3: Implement**; `BaileysGateway.sendText` mengembalikan `sent?.key?.id ?? null`; `selfNumber()` dari `sock.user.id` (potong `:device@…`). **Step 4: Run** `npx vitest run` → semua hijau.
 - [ ] **Step 5: Commit** `feat: bubbles, typing delay and gateway returns message ids`.
 
@@ -230,7 +230,7 @@ tests/                            cermin src/main, src/shared
 - [ ] **Step 1: Tes gagal** (penyedia palsu yang menghasilkan JSON agen; `FakeGateway`; profil `toko_online` dan `jasa_agensi`):
   - mode produk: "mau beli website umkm" → saran `send_checkout`, balasan memuat tautan produk dari katalog (dengan `utm_source=wa_bot`), `linkSent` terisi, event `checkout_sent` tercatat sekali; pesan kedua dalam 24 jam tidak mengirim tautan yang sama lagi.
   - mode jasa: setelah `kebutuhan` dan `nama` terkumpul dan intent `siap_beli` → `handoff`, `sendText` ke admin berisi ringkasan, status `menunggu_admin`, pesan pelanggan berikutnya `ignored/human`; farewell memuat jam kerja.
-  - **Nomor bot:** model mengeluarkan "hubungi 0851-1930-8345" → keluaran tidak memuat nomor itu dalam format apa pun.
+  - **Nomor bot:** model mengeluarkan "hubungi 0812-0000-9999" → keluaran tidak memuat nomor itu dalam format apa pun.
   - **URL:** model mengeluarkan `http://evil.test/pay` → terhapus; `https://` di allowlist → lolos.
   - **Angka:** model mengeluarkan "Rp2.000.000" saat katalog Rp1.500.000 → diganti `templates.unknown`.
   - komplain ("barang saya rusak") → `handoff` forced walau model menyarankan `none`.
@@ -287,7 +287,7 @@ tests/                            cermin src/main, src/shared
 
 **Interfaces:** Consumes semua task. Tidak menambah API.
 
-- [ ] **Step 1: Tes gagal** (pipeline lengkap dengan `FakeGateway`, penyedia palsu berskrip, `IndexStore` berisi file pengetahuan nyata dari `knowledge/kerabat-koding`, katalog nyata, profil `toko_online`/`jasa_agensi`): (a) pelanggan "berapa harga website umkm?" lalu "oke saya mau" → dua balasan, tautan checkout dikirim sekali; (b) pelanggan jasa "mau bikin aplikasi kasir" → pertanyaan kualifikasi → data lengkap → serah, admin menerima ringkasan; (c) admin membalas dari HP → bot diam sampai 6 jam; (d) **tidak satu pun** `sendText` ke pelanggan, dalam semua skenario, memuat `6285119308345`, `0851-1930-8345`, atau frasa "lewat WhatsApp" yang menyuruh menghubungi; (e) potongan dokumen yang diberikan ke penyedia palsu tidak memuat baris ajakan website.
+- [ ] **Step 1: Tes gagal** (pipeline lengkap dengan `FakeGateway`, penyedia palsu berskrip, `IndexStore` berisi file pengetahuan nyata dari `knowledge/kerabat-koding`, katalog nyata, profil `toko_online`/`jasa_agensi`): (a) pelanggan "berapa harga website umkm?" lalu "oke saya mau" → dua balasan, tautan checkout dikirim sekali; (b) pelanggan jasa "mau bikin aplikasi kasir" → pertanyaan kualifikasi → data lengkap → serah, admin menerima ringkasan; (c) admin membalas dari HP → bot diam sampai 6 jam; (d) **tidak satu pun** `sendText` ke pelanggan, dalam semua skenario, memuat `6281200009999`, `0812-0000-9999`, atau frasa "lewat WhatsApp" yang menyuruh menghubungi; (e) potongan dokumen yang diberikan ke penyedia palsu tidak memuat baris ajakan website.
 - [ ] **Step 2: Run** → FAIL (dokumen masih memuat ajakan).
 - [ ] **Step 3: Implement.** Edit file pengetahuan: ganti kalimat "lewat WhatsApp"/"tanya/konsultasi via WhatsApp" dengan rumusan netral ("minta estimasi ke tim", "diskusikan kebutuhan"), pertahankan nomor hanya di `00-profil-dan-kontak.md` dalam bagian bertanda `<!-- hanya untuk manusia -->` yang disaring `sanitizeChunk`; buat `katalog.csv` untuk Website UMKM, Website Custom, tiga paket Audit SEO, tiga paket SEO bulanan (harga persis dari file pengetahuan; `checkout_url` kosong untuk produk jasa); perbarui `docs/manual-acceptance.md` dengan langkah: atur brand di halaman baru, uji simulator, skenario produk dan jasa, ambil alih dari HP, dan pastikan bot tidak menyebut nomornya sendiri.
 - [ ] **Step 4: Run** `npx vitest run` → hijau; `npx tsc --noEmit`; `npx electron-vite build`.
